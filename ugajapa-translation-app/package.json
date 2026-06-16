@@ -1,6 +1,6 @@
 {
     "name": "ugajapa-translation-app",
-    "version": "1.0.0",
+    "version": "1.0.1",
     "description": "UgaJapa Connect — EN/Luganda ↔ Japanese translation for Rocket.Chat",
     "main": "UgaJapaTranslationApp.js",
     "license": "MIT",
