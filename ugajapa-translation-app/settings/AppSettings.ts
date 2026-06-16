@@ -8,16 +8,7 @@ export const AppSettings: ISetting[] = [
         required: false,
         public: false,
         i18nLabel: 'NVIDIA NIM API Key',
-        i18nDescription: 'NVIDIA API key (nvapi-...) for text translation. Get one free at build.nvidia.com',
-    },
-    {
-        id: 'ugajapa_gemini_api_key',
-        type: SettingType.PASSWORD,
-        packageValue: '',
-        required: false,
-        public: false,
-        i18nLabel: 'Gemini API Key (voice & video)',
-        i18nDescription: 'Google Gemini key for speech-to-text and text-to-speech. Required for voice/video messages. Get one free at aistudio.google.com/app/apikey',
+        i18nDescription: 'NVIDIA API key (nvapi-...) for text, voice, and video translation. Get one free at build.nvidia.com',
     },
     {
         id: 'ugajapa_default_target_lang',
@@ -67,7 +58,7 @@ export const AppSettings: ISetting[] = [
         required: false,
         public: false,
         i18nLabel: 'Speech-to-Text Endpoint (optional)',
-        i18nDescription: 'Leave empty to use Gemini. Set only if you self-host an NVIDIA Speech NIM container.',
+        i18nDescription: 'Leave empty to use the local stt-proxy + Whisper service (docker compose). Override for a custom STT URL.',
     },
     {
         id: 'ugajapa_tts_endpoint',
@@ -76,6 +67,6 @@ export const AppSettings: ISetting[] = [
         required: false,
         public: false,
         i18nLabel: 'Text-to-Speech Endpoint (optional)',
-        i18nDescription: 'Leave empty to use Gemini. Set only if you self-host an NVIDIA Speech NIM container.',
+        i18nDescription: 'Optional OpenAI-compatible TTS URL. Leave empty to show translated text only (no synthesized audio).',
     },
 ];

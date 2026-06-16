@@ -1,5 +1,6 @@
 volumes:
   mongodb_data:
+  hf-hub-cache:
 services:
   mongodb:
     image: ${MONGODB_IMAGE:-l33tlamer/mongodb-without-avx:latest}
@@ -21,12 +22,34 @@ services:
     volumes:
       - ./scripts/mongodb-init.sh:/mongodb-init.sh:ro
     entrypoint: ["bash", "/mongodb-init.sh"]
+  speech-stt:
+    image: ghcr.io/speaches-ai/speaches:latest-cpu
+    restart: unless-stopped
+    environment:
+      PRELOAD_MODELS: '["Systran/faster-whisper-base"]'
+      WHISPER__COMPUTE_TYPE: int8
+      WHISPER__INFERENCE_DEVICE: cpu
+      STT_MODEL_TTL: -1
+    volumes:
+      - hf-hub-cache:/home/ubuntu/.cache/huggingface/hub
+  stt-proxy:
+    build: ./stt-proxy
+    restart: unless-stopped
+    depends_on:
+      - speech-stt
+    environment:
+      STT_URL: http://speech-stt:8000/v1/audio/transcriptions
+      WHISPER_MODEL: Systran/faster-whisper-base
   rocketchat:
     image: ${ROCKETCHAT_IMAGE:-registry.rocket.chat/rocketchat/rocket.chat:7.9.3}
     restart: unless-stopped
     depends_on:
       mongodb-init:
         condition: service_completed_successfully
+      speech-stt:
+        condition: service_started
+      stt-proxy:
+        condition: service_started
     ports:
       - "${HOST_PORT:-3000}:3000"
     environment:

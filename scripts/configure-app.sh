@@ -12,7 +12,7 @@ fi
 RC_URL="${RC_URL:-http://localhost:3001}"
 RC_USERNAME="${RC_USERNAME:-admin}"
 RC_PASSWORD="${RC_PASSWORD:-change-me}"
-GEMINI_API_KEY="${GEMINI_API_KEY:-}"
+NVIDIA_API_KEY="${NVIDIA_API_KEY:-${ANTHROPIC_API_KEY:-}}"
 
 LOGIN=$(curl -s -X POST "$RC_URL/api/v1/login" \
     -H "Content-Type: application/json" \
@@ -26,20 +26,45 @@ if [ -z "$TOKEN" ]; then
     exit 1
 fi
 
-if [ -z "$GEMINI_API_KEY" ]; then
-    echo "Paste your Gemini API key (AIza...) for voice/video translation:"
-    read -r GEMINI_API_KEY
+if [ -z "$NVIDIA_API_KEY" ]; then
+    echo "Paste your NVIDIA NIM API key (nvapi-...):"
+    read -r NVIDIA_API_KEY
 fi
+
+if [[ ! "$NVIDIA_API_KEY" =~ ^nvapi- ]]; then
+    echo "Invalid key format. Get a key from https://build.nvidia.com/settings/api-keys"
+    echo "It must start with nvapi-"
+    exit 1
+fi
+
+if [ "${SKIP_NVIDIA_TEST:-}" != "1" ]; then
+    echo "Testing NVIDIA API key..."
+    NVIDIA_TEST=$(curl -s -o /tmp/nvidia_test.json -w "%{http_code}" \
+        "https://integrate.api.nvidia.com/v1/models" \
+        -H "Authorization: Bearer $NVIDIA_API_KEY")
+
+    if [ "$NVIDIA_TEST" != "200" ]; then
+        echo "NVIDIA API test failed (HTTP $NVIDIA_TEST)."
+        python3 -c "import json; d=json.load(open('/tmp/nvidia_test.json')); print(d)" 2>/dev/null || cat /tmp/nvidia_test.json
+        echo ""
+        echo "To save without testing: SKIP_NVIDIA_TEST=1 NVIDIA_API_KEY='...' ./scripts/configure-app.sh"
+        exit 1
+    fi
+    echo "NVIDIA API key verified."
+fi
+
+export NVIDIA_API_KEY
 
 SETTINGS=$(python3 - <<PY
 import json, os
 settings = [
-    {"id": "ugajapa_claude_api_key", "value": os.environ.get("ANTHROPIC_API_KEY", "")},
-    {"id": "ugajapa_gemini_api_key", "value": os.environ.get("GEMINI_API_KEY", "")},
+    {"id": "ugajapa_claude_api_key", "value": os.environ.get("NVIDIA_API_KEY", "")},
     {"id": "ugajapa_default_target_lang", "value": "ja"},
     {"id": "ugajapa_auto_translate", "value": True},
     {"id": "ugajapa_show_hints", "value": True},
     {"id": "ugajapa_translate_voice", "value": True},
+    {"id": "ugajapa_stt_endpoint", "value": ""},
+    {"id": "ugajapa_tts_endpoint", "value": ""},
 ]
 print(json.dumps({"settings": settings}))
 PY

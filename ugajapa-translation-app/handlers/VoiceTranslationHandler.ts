@@ -41,7 +41,6 @@ export class VoiceTranslationHandler {
         await persistence.createWithAssociation({ processedAt: new Date() }, this.processedAssociation(file._id));
 
         const apiKey = (await read.getEnvironmentReader().getSettings().getValueById('ugajapa_claude_api_key')) as string;
-        const geminiApiKey = (await read.getEnvironmentReader().getSettings().getValueById('ugajapa_gemini_api_key')) as string;
         const sttEndpoint = (await read.getEnvironmentReader().getSettings().getValueById('ugajapa_stt_endpoint')) as string;
         const ttsEndpoint = (await read.getEnvironmentReader().getSettings().getValueById('ugajapa_tts_endpoint')) as string;
         const targetLang = ((await RoomLanguageService.getLanguage(read, message.room.id)) || 'ja') as SupportedLanguage;
@@ -53,9 +52,17 @@ export class VoiceTranslationHandler {
             mimeType: file.type || 'audio/ogg',
             endpoint: sttEndpoint,
             apiKey,
-            geminiApiKey,
             http,
         });
+
+        if (transcript.demo) {
+            const reason = transcript.error || 'Speech-to-text failed';
+            const builder = modify.getNotifier().getMessageBuilder()
+                .setRoom(message.room)
+                .setText(`⚠️ *Voice translation failed:* ${reason}`);
+            await modify.getNotifier().notifyUser(message.sender, builder.getMessage());
+            return;
+        }
 
         if (transcript.sourceLang === targetLang) return;
 
@@ -72,13 +79,12 @@ export class VoiceTranslationHandler {
             targetLang,
             endpoint: ttsEndpoint,
             apiKey,
-            geminiApiKey,
             http,
         });
 
         let captionText = `🎙️ *[${transcript.sourceLang.toUpperCase()} → ${targetLang.toUpperCase()}]*\n${translation.translation}`;
-        if (transcript.demo || synthesized.demo) {
-            captionText += '\n\n⚠️ _Demo mode — add a Gemini API key in Admin → Apps → UgaJapa Translation → Settings for real voice/video translation._';
+        if (synthesized.demo && synthesized.error) {
+            captionText += `\n\n_(No audio reply: ${synthesized.error})_`;
         }
 
         const attachment = synthesized.audio

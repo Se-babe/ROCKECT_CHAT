@@ -35,7 +35,10 @@ export class UgaJapaTranslationApp extends App implements IPreMessageSentExtend,
     }
 
     public async checkPreMessageSentExtend(message: IMessage, read: IRead, http: IHttp): Promise<boolean> {
-        return Boolean(message.text?.trim()) && !message.customFields?.ugajapa_translation;
+        const text = message.text?.trim();
+        if (!text || message.customFields?.ugajapa_translation) return false;
+        if (text.startsWith('/')) return false;
+        return true;
     }
 
     public async executePreMessageSentExtend(

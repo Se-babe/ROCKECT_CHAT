@@ -1,13 +1,12 @@
 import { IHttp } from '@rocket.chat/apps-engine/definition/accessors';
-import { LanguageDetectionService, SupportedLanguage } from './LanguageDetectionService';
-import { GeminiMediaService, resolveGeminiApiKey } from './GeminiMediaService';
+import { SupportedLanguage } from './LanguageDetectionService';
+import { DEFAULT_STT_URL, NvidiaMediaService } from './NvidiaMediaService';
 
 export interface TranscribeRequest {
     audio: Buffer;
     mimeType: string;
     endpoint: string;
     apiKey: string;
-    geminiApiKey?: string;
     http: IHttp;
 }
 
@@ -15,53 +14,30 @@ export interface TranscribeResult {
     text: string;
     sourceLang: SupportedLanguage;
     demo: boolean;
+    error?: string;
 }
 
-const DEMO_TRANSCRIPT = '[Voice message — demo mode, no Gemini API key configured for speech-to-text]';
+const DEMO_TRANSCRIPT = '[Voice message — speech-to-text unavailable]';
 
 export class SpeechToTextService {
     public static async transcribe(req: TranscribeRequest): Promise<TranscribeResult> {
-        const geminiKey = resolveGeminiApiKey(req.apiKey, req.geminiApiKey);
-        if (geminiKey) {
-            try {
-                return await GeminiMediaService.transcribe(req.audio, req.mimeType, geminiKey, req.http);
-            } catch {
-                // Fall through to custom endpoint or demo mode.
-            }
-        }
+        const endpoint = req.endpoint?.trim() || DEFAULT_STT_URL;
 
-        if (!req.apiKey?.trim() || !req.endpoint?.trim()) {
-            return { text: DEMO_TRANSCRIPT, sourceLang: 'en', demo: true };
+        if (endpoint.includes('integrate.api.nvidia.com')) {
+            return {
+                text: DEMO_TRANSCRIPT,
+                sourceLang: 'en',
+                demo: true,
+                error: 'NVIDIA cloud STT is not available on integrate.api.nvidia.com. Use the default local stt-proxy service or set a custom STT endpoint.',
+            };
         }
 
         try {
-            const response = await req.http.post(req.endpoint, {
-                headers: {
-                    Authorization: `Bearer ${req.apiKey.trim()}`,
-                    'Content-Type': 'application/json',
-                    Accept: 'application/json',
-                },
-                content: JSON.stringify({
-                    audio: req.audio.toString('base64'),
-                    mime_type: req.mimeType,
-                    encoding: 'base64',
-                }),
-            });
-
-            if (!response || response.statusCode >= 400) {
-                throw new Error(`STT endpoint error: ${response?.statusCode} - ${response?.content}`);
-            }
-
-            const body = response.data || (response.content ? JSON.parse(response.content) : null);
-            const text: string | undefined = body?.text ?? body?.transcript ?? body?.results?.[0]?.alternatives?.[0]?.transcript;
-
-            if (!text?.trim()) {
-                throw new Error(`Unexpected STT response: ${JSON.stringify(body)}`);
-            }
-
-            return { text: text.trim(), sourceLang: LanguageDetectionService.detect(text), demo: false };
-        } catch {
-            return { text: DEMO_TRANSCRIPT, sourceLang: 'en', demo: true };
+            const apiKey = req.apiKey?.trim() ?? '';
+            return await NvidiaMediaService.transcribe(req.audio, req.mimeType, apiKey, req.http, endpoint, false);
+        } catch (err) {
+            const message = err instanceof Error ? err.message : String(err);
+            return { text: DEMO_TRANSCRIPT, sourceLang: 'en', demo: true, error: message };
         }
     }
 }
