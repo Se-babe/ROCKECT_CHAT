@@ -1,0 +1,51 @@
+{
+    "id": "f47ac10b-58cc-4372-a567-0e02b2c3d479",
+    "version": "1.0.0",
+    "requiredApiVersion": "^1.44.0",
+    "iconFile": "icon.png",
+    "author": {
+        "name": "UgaJapa Connect Team",
+        "homepage": "https://github.com/ugajapa-connect",
+        "support": "team@ugajapa.ac.ug"
+    },
+    "name": "UgaJapa Translation",
+    "nameSlug": "ugajapa-translation",
+    "classFile": "UgaJapaTranslationApp.ts",
+    "description": "Real-time EN/Luganda to Japanese translation with cultural intelligence hints",
+    "categories": [
+        "Productivity",
+        "Communication"
+    ],
+    "permissions": [
+        {
+            "name": "networking"
+        },
+        {
+            "name": "message.read"
+        },
+        {
+            "name": "message.write"
+        },
+        {
+            "name": "room.read"
+        },
+        {
+            "name": "room.write"
+        },
+        {
+            "name": "user.read"
+        },
+        {
+            "name": "slashcommand"
+        },
+        {
+            "name": "persistence"
+        },
+        {
+            "name": "env.read"
+        }
+    ],
+    "implements": [
+        "IPreMessageSentExtend"
+    ]
+}

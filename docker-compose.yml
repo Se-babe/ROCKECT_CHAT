@@ -1,0 +1,55 @@
+volumes:
+  mongodb_data:
+services:
+  mongodb:
+    image: ${MONGODB_IMAGE:-l33tlamer/mongodb-without-avx:latest}
+    restart: unless-stopped
+    volumes:
+      - mongodb_data:/data/db
+    command: ["mongod", "--replSet", "rs0", "--bind_ip_all"]
+    healthcheck:
+      test: ["CMD-SHELL", "mongo --quiet --eval 'db.adminCommand({ ping: 1})' || exit 1"]
+      interval: 10s
+      timeout: 10s
+      retries: 18
+      start_period: 30s
+  mongodb-init:
+    image: ${MONGODB_IMAGE:-l33tlamer/mongodb-without-avx:latest}
+    depends_on:
+      - mongodb
+    restart: on-failure
+    volumes:
+      - ./scripts/mongodb-init.sh:/mongodb-init.sh:ro
+    entrypoint: ["bash", "/mongodb-init.sh"]
+  rocketchat:
+    image: ${ROCKETCHAT_IMAGE:-registry.rocket.chat/rocketchat/rocket.chat:7.9.3}
+    restart: unless-stopped
+    depends_on:
+      mongodb-init:
+        condition: service_completed_successfully
+    ports:
+      - "${HOST_PORT:-3000}:3000"
+    environment:
+      MONGO_URL: mongodb://mongodb:27017/rocketchat?replicaSet=rs0
+      ROOT_URL: ${ROOT_URL:-http://localhost:3000}
+      PORT: 3000
+      DEPLOY_METHOD: docker
+      NODE_OPTIONS: "--max-old-space-size=4096"
+      OVERWRITE_SETTING_Apps_Framework_enabled: "true"
+      OVERWRITE_SETTING_Apps_Framework_Development_Mode: "true"
+      OVERWRITE_SETTING_Message_AllowCustomFields: "true"
+      OVERWRITE_SETTING_Apps_Logs_Level: "2"
+    entrypoint: sh
+    command:
+      - -c
+      - |
+        echo "Waiting for MongoDB replica set...";
+        for i in $(seq 1 60); do
+          if nc -z mongodb 27017 2>/dev/null; then
+            echo "MongoDB is up - starting Rocket.Chat";
+            exec node main.js;
+          fi
+          sleep 5
+        done
+        echo "MongoDB not reachable after 5 minutes";
+        exit 1

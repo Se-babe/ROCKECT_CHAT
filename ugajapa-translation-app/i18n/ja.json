@@ -1,0 +1,6 @@
+{
+    "ugajapa_claude_api_key": "Claude APIキー",
+    "ugajapa_default_target_lang": "デフォルト翻訳言語",
+    "ugajapa_show_hints": "文化的ヒントを表示",
+    "ugajapa_auto_translate": "すべてのメッセージを自動翻訳"
+}

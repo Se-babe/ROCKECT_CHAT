@@ -1,0 +1,18 @@
+{
+    "name": "ugajapa-translation-app",
+    "version": "1.0.0",
+    "description": "UgaJapa Connect — EN/Luganda ↔ Japanese translation for Rocket.Chat",
+    "main": "UgaJapaTranslationApp.js",
+    "license": "MIT",
+    "devDependencies": {
+        "@rocket.chat/apps-cli": "^1.11.0",
+        "@rocket.chat/apps-engine": "^1.44.0",
+        "@rocket.chat/ui-kit": "^0.36.1",
+        "@types/node": "^20.14.0",
+        "typescript": "^5.5.0"
+    },
+    "scripts": {
+        "package": "rc-apps package",
+        "deploy": "rc-apps deploy"
+    }
+}
