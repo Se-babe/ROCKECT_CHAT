@@ -1,0 +1,1632 @@
+[1mdiff --git a/.env.example b/.env.example[m
+[1mindex c276be0..fd965c2 100644[m
+[1m--- a/.env.example[m
+[1m+++ b/.env.example[m
+[36m@@ -10,8 +10,8 @@[m [mHOST_PORT=3000[m
+ [m
+ # App deployment (used by scripts/deploy-app.sh)[m
+ RC_URL=http://localhost:3000[m
+[31m-RC_USERNAME=admin[m
+[31m-RC_PASSWORD=change-me[m
+[32m+[m[32mRC_USERNAME=sebabe[m
+[32m+[m[32mRC_PASSWORD=Swale95941%[m
+ [m
+ # Claude API (configure in Admin > Apps > UgaJapa Translation after deploy)[m
+[31m-ANTHROPIC_API_KEY=[m
+[32m+[m[32mANTHROPIC_API_KEY=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[m
+[1mdiff --git a/README.md b/README.md[m
+[1mindex c21b7c6..305fd48 100644[m
+[1m--- a/README.md[m
+[1m+++ b/README.md[m
+[36m@@ -124,4 +124,3 @@[m [mKey endpoints: `/api/v1/login`, `/api/v1/chat.sendMessage`, `/api/v1/rooms.info`[m
+ ## License[m
+ [m
+ MIT — Rocket.Chat is MIT; UgaJapa Translation App is MIT.[m
+[31m-# TransChecker-plugin[m
+[1mdiff --git a/docker-compose.yml b/docker-compose.yml[m
+[1mindex 2d3b864..022b592 100644[m
+[1m--- a/docker-compose.yml[m
+[1m+++ b/docker-compose.yml[m
+[36m@@ -1,6 +1,5 @@[m
+ volumes:[m
+   mongodb_data:[m
+[31m-  hf-hub-cache:[m
+ services:[m
+   mongodb:[m
+     image: ${MONGODB_IMAGE:-l33tlamer/mongodb-without-avx:latest}[m
+[36m@@ -22,34 +21,12 @@[m [mservices:[m
+     volumes:[m
+       - ./scripts/mongodb-init.sh:/mongodb-init.sh:ro[m
+     entrypoint: ["bash", "/mongodb-init.sh"][m
+[31m-  speech-stt:[m
+[31m-    image: ghcr.io/speaches-ai/speaches:latest-cpu[m
+[31m-    restart: unless-stopped[m
+[31m-    environment:[m
+[31m-      PRELOAD_MODELS: '["Systran/faster-whisper-base"]'[m
+[31m-      WHISPER__COMPUTE_TYPE: int8[m
+[31m-      WHISPER__INFERENCE_DEVICE: cpu[m
+[31m-      STT_MODEL_TTL: -1[m
+[31m-    volumes:[m
+[31m-      - hf-hub-cache:/home/ubuntu/.cache/huggingface/hub[m
+[31m-  stt-proxy:[m
+[31m-    build: ./stt-proxy[m
+[31m-    restart: unless-stopped[m
+[31m-    depends_on:[m
+[31m-      - speech-stt[m
+[31m-    environment:[m
+[31m-      STT_URL: http://speech-stt:8000/v1/audio/transcriptions[m
+[31m-      WHISPER_MODEL: Systran/faster-whisper-base[m
+   rocketchat:[m
+     image: ${ROCKETCHAT_IMAGE:-registry.rocket.chat/rocketchat/rocket.chat:7.9.3}[m
+     restart: unless-stopped[m
+     depends_on:[m
+       mongodb-init:[m
+         condition: service_completed_successfully[m
+[31m-      speech-stt:[m
+[31m-        condition: service_started[m
+[31m-      stt-proxy:[m
+[31m-        condition: service_started[m
+     ports:[m
+       - "${HOST_PORT:-3000}:3000"[m
+     environment:[m
+[1mdiff --git a/scripts/app-status.sh b/scripts/app-status.sh[m
+[1mdeleted file mode 100755[m
+[1mindex 1f5b3b6..0000000[m
+[1m--- a/scripts/app-status.sh[m
+[1m+++ /dev/null[m
+[36m@@ -1,46 +0,0 @@[m
+[31m-#!/usr/bin/env bash[m
+[31m-set -euo pipefail[m
+[31m-[m
+[31m-ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"[m
+[31m-APP_ID="f47ac10b-58cc-4372-a567-0e02b2c3d479"[m
+[31m-[m
+[31m-if [ -f "$ROOT_DIR/.env" ]; then[m
+[31m-    # shellcheck disable=SC1091[m
+[31m-    source "$ROOT_DIR/.env"[m
+[31m-fi[m
+[31m-[m
+[31m-RC_URL="${RC_URL:-http://localhost:3001}"[m
+[31m-RC_USERNAME="${RC_USERNAME:-admin}"[m
+[31m-RC_PASSWORD="${RC_PASSWORD:-change-me}"[m
+[31m-[m
+[31m-LOGIN=$(curl -s -X POST "$RC_URL/api/v1/login" \[m
+[31m-    -H "Content-Type: application/json" \[m
+[31m-    -d "{\"user\":\"$RC_USERNAME\",\"password\":\"$RC_PASSWORD\"}")[m
+[31m-[m
+[31m-TOKEN=$(echo "$LOGIN" | python3 -c "import sys,json; print(json.load(sys.stdin).get('data',{}).get('authToken',''))")[m
+[31m-USERID=$(echo "$LOGIN" | python3 -c "import sys,json; print(json.load(sys.stdin).get('data',{}).get('userId',''))")[m
+[31m-[m
+[31m-if [ -z "$TOKEN" ]; then[m
+[31m-    echo "Login failed for $RC_USERNAME on $RC_URL"[m
+[31m-    exit 1[m
+[31m-fi[m
+[31m-[m
+[31m-RESPONSE=$(curl -s "$RC_URL/api/apps/installed" \[m
+[31m-    -H "X-Auth-Token: $TOKEN" \[m
+[31m-    -H "X-User-Id: $USERID")[m
+[31m-[m
+[31m-echo "$RESPONSE" | python3 -c "[m
+[31m-import json, sys[m
+[31m-data = json.load(sys.stdin)[m
+[31m-apps = data.get('apps', [])[m
+[31m-print(f'Installed via API: {len(apps)} app(s)')[m
+[31m-for app in apps:[m
+[31m-    print(f\"  - {app.get('name')} v{app.get('version')} [{app.get('status')}] private={app.get('private')}\")[m
+[31m-print()[m
+[31m-print('If Marketplace UI is empty, the app is still installed. Open these on the SAME port as RC_URL:')[m
+[31m-print(f'  Installed info: $RC_URL/admin/marketplace/installed/info/$APP_ID')[m
+[31m-print(f'  Settings:       $RC_URL/admin/marketplace/installed/$APP_ID/settings')[m
+[31m-print()[m
+[31m-print('Do NOT re-upload via Private Apps if CLI deploy already succeeded.')[m
+[31m-print('Use ./scripts/deploy-app.sh for updates instead of the UI upload dialog.')[m
+[31m-"[m
+[1mdiff --git a/scripts/configure-app.sh b/scripts/configure-app.sh[m
+[1mdeleted file mode 100755[m
+[1mindex 0233ca8..0000000[m
+[1m--- a/scripts/configure-app.sh[m
+[1m+++ /dev/null[m
+[36m@@ -1,79 +0,0 @@[m
+[31m-#!/usr/bin/env bash[m
+[31m-set -euo pipefail[m
+[31m-[m
+[31m-ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"[m
+[31m-APP_ID="f47ac10b-58cc-4372-a567-0e02b2c3d479"[m
+[31m-[m
+[31m-if [ -f "$ROOT_DIR/.env" ]; then[m
+[31m-    # shellcheck disable=SC1091[m
+[31m-    source "$ROOT_DIR/.env"[m
+[31m-fi[m
+[31m-[m
+[31m-RC_URL="${RC_URL:-http://localhost:3001}"[m
+[31m-RC_USERNAME="${RC_USERNAME:-admin}"[m
+[31m-RC_PASSWORD="${RC_PASSWORD:-change-me}"[m
+[31m-NVIDIA_API_KEY="${NVIDIA_API_KEY:-${ANTHROPIC_API_KEY:-}}"[m
+[31m-[m
+[31m-LOGIN=$(curl -s -X POST "$RC_URL/api/v1/login" \[m
+[31m-    -H "Content-Type: application/json" \[m
+[31m-    -d "{\"user\":\"$RC_USERNAME\",\"password\":\"$RC_PASSWORD\"}")[m
+[31m-[m
+[31m-TOKEN=$(echo "$LOGIN" | python3 -c "import sys,json; print(json.load(sys.stdin).get('data',{}).get('authToken',''))")[m
+[31m-USERID=$(echo "$LOGIN" | python3 -c "import sys,json; print(json.load(sys.stdin).get('data',{}).get('userId',''))")[m
+[31m-[m
+[31m-if [ -z "$TOKEN" ]; then[m
+[31m-    echo "Login failed for $RC_USERNAME on $RC_URL"[m
+[31m-    exit 1[m
+[31m-fi[m
+[31m-[m
+[31m-if [ -z "$NVIDIA_API_KEY" ]; then[m
+[31m-    echo "Paste your NVIDIA NIM API key (nvapi-...):"[m
+[31m-    read -r NVIDIA_API_KEY[m
+[31m-fi[m
+[31m-[m
+[31m-if [[ ! "$NVIDIA_API_KEY" =~ ^nvapi- ]]; then[m
+[31m-    echo "Invalid key format. Get a key from https://build.nvidia.com/settings/api-keys"[m
+[31m-    echo "It must start with nvapi-"[m
+[31m-    exit 1[m
+[31m-fi[m
+[31m-[m
+[31m-if [ "${SKIP_NVIDIA_TEST:-}" != "1" ]; then[m
+[31m-    echo "Testing NVIDIA API key..."[m
+[31m-    NVIDIA_TEST=$(curl -s -o /tmp/nvidia_test.json -w "%{http_code}" \[m
+[31m-        "https://integrate.api.nvidia.com/v1/models" \[m
+[31m-        -H "Authorization: Bearer $NVIDIA_API_KEY")[m
+[31m-[m
+[31m-    if [ "$NVIDIA_TEST" != "200" ]; then[m
+[31m-        echo "NVIDIA API test failed (HTTP $NVIDIA_TEST)."[m
+[31m-        python3 -c "import json; d=json.load(open('/tmp/nvidia_test.json')); print(d)" 2>/dev/null || cat /tmp/nvidia_test.json[m
+[31m-        echo ""[m
+[31m-        echo "To save without testing: SKIP_NVIDIA_TEST=1 NVIDIA_API_KEY='...' ./scripts/configure-app.sh"[m
+[31m-        exit 1[m
+[31m-    fi[m
+[31m-    echo "NVIDIA API key verified."[m
+[31m-fi[m
+[31m-[m
+[31m-export NVIDIA_API_KEY[m
+[31m-[m
+[31m-SETTINGS=$(python3 - <<PY[m
+[31m-import json, os[m
+[31m-settings = [[m
+[31m-    {"id": "ugajapa_claude_api_key", "value": os.environ.get("NVIDIA_API_KEY", "")},[m
+[31m-    {"id": "ugajapa_default_target_lang", "value": "ja"},[m
+[31m-    {"id": "ugajapa_auto_translate", "value": True},[m
+[31m-    {"id": "ugajapa_show_hints", "value": True},[m
+[31m-    {"id": "ugajapa_translate_voice", "value": True},[m
+[31m-    {"id": "ugajapa_stt_endpoint", "value": ""},[m
+[31m-    {"id": "ugajapa_tts_endpoint", "value": ""},[m
+[31m-][m
+[31m-print(json.dumps({"settings": settings}))[m
+[31m-PY[m
+[31m-)[m
+[31m-[m
+[31m-SAVE=$(curl -s -X POST "$RC_URL/api/apps/$APP_ID/settings" \[m
+[31m-    -H "X-Auth-Token: $TOKEN" \[m
+[31m-    -H "X-User-Id: $USERID" \[m
+[31m-    -H "Content-Type: application/json" \[m
+[31m-    -d "$SETTINGS")[m
+[31m-[m
+[31m-echo "$SAVE" | python3 -c "import sys,json; d=json.load(sys.stdin); print('Settings saved.' if d.get('success') else d)"[m
+[1mdiff --git a/scripts/deploy-app.sh b/scripts/deploy-app.sh[m
+[1mindex 86d783c..77affaf 100755[m
+[1m--- a/scripts/deploy-app.sh[m
+[1m+++ b/scripts/deploy-app.sh[m
+[36m@@ -34,7 +34,3 @@[m [mecho "==> Deploying to $RC_URL"[m
+     --password "$RC_PASSWORD"[m
+ [m
+ echo "Deployed. Enable the app in Admin > Apps if it is not already active."[m
+[31m-echo ""[m
+[31m-echo "Open this exact URL in your browser (not port 3000 if you run two stacks):"[m
+[31m-echo "  $RC_URL"[m
+[31m-echo "Then: Marketplace > Installed — look for UgaJapa Translation (or use ./scripts/app-status.sh)"[m
+[1mdiff --git a/scripts/restart-app.sh b/scripts/restart-app.sh[m
+[1mdeleted file mode 100755[m
+[1mindex b605a8d..0000000[m
+[1m--- a/scripts/restart-app.sh[m
+[1m+++ /dev/null[m
+[36m@@ -1,41 +0,0 @@[m
+[31m-#!/usr/bin/env bash[m
+[31m-set -euo pipefail[m
+[31m-[m
+[31m-ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"[m
+[31m-APP_ID="f47ac10b-58cc-4372-a567-0e02b2c3d479"[m
+[31m-[m
+[31m-if [ -f "$ROOT_DIR/.env" ]; then[m
+[31m-    # shellcheck disable=SC1091[m
+[31m-    source "$ROOT_DIR/.env"[m
+[31m-fi[m
+[31m-[m
+[31m-RC_URL="${RC_URL:-http://localhost:3001}"[m
+[31m-RC_USERNAME="${RC_USERNAME:-admin}"[m
+[31m-RC_PASSWORD="${RC_PASSWORD:-change-me}"[m
+[31m-[m
+[31m-LOGIN=$(curl -s -X POST "$RC_URL/api/v1/login" \[m
+[31m-    -H "Content-Type: application/json" \[m
+[31m-    -d "{\"user\":\"$RC_USERNAME\",\"password\":\"$RC_PASSWORD\"}")[m
+[31m-[m
+[31m-TOKEN=$(echo "$LOGIN" | python3 -c "import sys,json; print(json.load(sys.stdin).get('data',{}).get('authToken',''))")[m
+[31m-USERID=$(echo "$LOGIN" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('data',{}).get('userId',''))")[m
+[31m-[m
+[31m-if [ -z "$TOKEN" ]; then[m
+[31m-    echo "Login failed for $RC_USERNAME on $RC_URL"[m
+[31m-    exit 1[m
+[31m-fi[m
+[31m-[m
+[31m-set_status() {[m
+[31m-    curl -s -X POST "$RC_URL/api/apps/$APP_ID/status" \[m
+[31m-        -H "X-Auth-Token: $TOKEN" \[m
+[31m-        -H "X-User-Id: $USERID" \[m
+[31m-        -H "Content-Type: application/json" \[m
+[31m-        -d "{\"status\":\"$1\"}" | python3 -c "import sys,json; d=json.load(sys.stdin); print('status ->', d.get('status') or d.get('error'))"[m
+[31m-}[m
+[31m-[m
+[31m-echo "Disabling app to refresh runtime permissions..."[m
+[31m-set_status manually_disabled[m
+[31m-sleep 2[m
+[31m-echo "Re-enabling app..."[m
+[31m-set_status manually_enabled[m
+[31m-echo "Done. Try a voice/video message again."[m
+[1mdiff --git a/scripts/setup-complete.sh b/scripts/setup-complete.sh[m
+[1mindex 79cfc44..d5cf43b 100755[m
+[1m--- a/scripts/setup-complete.sh[m
+[1m+++ b/scripts/setup-complete.sh[m
+[36m@@ -1,197 +1,383 @@[m
+ #!/usr/bin/env bash[m
+[32m+[m[32m# ═══════════════════════════════════════════════════════════════════[m
+[32m+[m[32m#  UgaJapa Connect — Complete System Setup Script[m
+[32m+[m[32m#  Run this once to configure everything end-to-end[m
+[32m+[m[32m#  Usage: bash scripts/setup-complete.sh[m
+[32m+[m[32m# ═══════════════════════════════════════════════════════════════════[m
+ set -euo pipefail[m
+ [m
+ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"[m
+ APP_DIR="$ROOT_DIR/ugajapa-translation-app"[m
+ APP_ID="f47ac10b-58cc-4372-a567-0e02b2c3d479"[m
+ [m
+[31m-RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'[m
+[31m-BLUE='\033[0;34m'; TEAL='\033[0;36m'; BOLD='\033[1m'; NC='\033[0m'[m
+[32m+[m[32m# Colors for output[m
+[32m+[m[32mRED='\033[0;31m'[m
+[32m+[m[32mGREEN='\033[0;32m'[m
+[32m+[m[32mYELLOW='\033[1;33m'[m
+[32m+[m[32mBLUE='\033[0;34m'[m
+[32m+[m[32mTEAL='\033[0;36m'[m
+[32m+[m[32mBOLD='\033[1m'[m
+[32m+[m[32mNC='\033[0m'[m
+ [m
+ log()     { echo -e "${TEAL}[UgaJapa]${NC} $1"; }[m
+ success() { echo -e "${GREEN}[OK]${NC} $1"; }[m
+ warn()    { echo -e "${YELLOW}[WARN]${NC} $1"; }[m
+ error()   { echo -e "${RED}[ERROR]${NC} $1"; exit 1; }[m
+[31m-header()  { echo -e "\n${BOLD}${BLUE}══════════════════════════════════${NC}"; echo -e "${BOLD}${BLUE}  $1${NC}"; echo -e "${BOLD}${BLUE}══════════════════════════════════${NC}"; }[m
+[32m+[m[32mheader()  { echo -e "\n${BOLD}${BLUE}══════════════════════════════════════${NC}"; echo -e "${BOLD}${BLUE}  $1${NC}"; echo -e "${BOLD}${BLUE}══════════════════════════════════════${NC}"; }[m
+ [m
+[31m-[ -f "$ROOT_DIR/.env" ] && source "$ROOT_DIR/.env"[m
+[32m+[m[32m# Load .env[m
+[32m+[m[32mif [ -f "$ROOT_DIR/.env" ]; then[m
+[32m+[m[32m    source "$ROOT_DIR/.env"[m
+[32m+[m[32mfi[m
+ [m
+ RC_URL="${RC_URL:-http://localhost:3000}"[m
+[31m-RC_USERNAME="${RC_USERNAME:-sebabe}"[m
+[32m+[m[32mRC_USERNAME="${RC_USERNAME:-admin}"[m
+ RC_PASSWORD="${RC_PASSWORD:-}"[m
+ ANTHROPIC_API_KEY="${ANTHROPIC_API_KEY:-}"[m
+ [m
+ header "UgaJapa Connect — Complete System Setup"[m
+[31m-log "Server: $RC_URL | User: $RC_USERNAME"[m
+[32m+[m[32mecho ""[m
+[32m+[m[32mlog "Root:    $ROOT_DIR"[m
+[32m+[m[32mlog "App:     $APP_DIR"[m
+[32m+[m[32mlog "Server:  $RC_URL"[m
+[32m+[m[32mecho ""[m
+[32m+[m
+[32m+[m[32m# ─── STEP 0: Check Docker is running ──────────────────────────────[m
+[32m+[m[32mheader "Step 0 — Verifying Docker & Rocket.Chat"[m
+ [m
+[31m-# STEP 0 — Check server[m
+[31m-header "Step 0 — Checking Rocket.Chat"[m
+[31m-for i in $(seq 1 20); do[m
+[32m+[m[32mif ! docker compose -f "$ROOT_DIR/docker-compose.yml" ps | grep -q "running\|Up"; then[m
+[32m+[m[32m    warn "Rocket.Chat not running. Starting..."[m
+[32m+[m[32m    cd "$ROOT_DIR"[m
+[32m+[m[32m    docker compose up -d[m
+[32m+[m[32m    log "Waiting 40 seconds for server to start..."[m
+[32m+[m[32m    sleep 40[m
+[32m+[m[32mfi[m
+[32m+[m
+[32m+[m[32m# Wait for RC to respond[m
+[32m+[m[32mMAX=30[m
+[32m+[m[32mfor i in $(seq 1 $MAX); do[m
+     STATUS=$(curl -s -o /dev/null -w "%{http_code}" "$RC_URL/api/v1/info" 2>/dev/null || echo "000")[m
+     if [ "$STATUS" = "200" ]; then[m
+[31m-        success "Rocket.Chat is up at $RC_URL"[m
+[32m+[m[32m        success "Rocket.Chat is responding at $RC_URL"[m
+         break[m
+     fi[m
+[31m-    [ "$i" = "20" ] && error "Server not responding. Run: cd ~/Desktop/ROCKECT_CHAT && docker compose up -d"[m
+[31m-    echo -n "."; sleep 3[m
+[32m+[m[32m    if [ "$i" = "$MAX" ]; then[m
+[32m+[m[32m        error "Rocket.Chat did not respond after ${MAX} attempts. Check: docker compose logs rocketchat"[m
+[32m+[m[32m    fi[m
+[32m+[m[32m    echo -n "."[m
+[32m+[m[32m    sleep 3[m
+ done[m
+ [m
+[31m-# STEP 1 — Login[m
+[31m-header "Step 1 — Login"[m
+[31m-[ -z "$RC_PASSWORD" ] && { read -s -p "Admin password for '$RC_USERNAME': " RC_PASSWORD; echo ""; }[m
+[32m+[m[32m# ─── STEP 1: Login ────────────────────────────────────────────────[m
+[32m+[m[32mheader "Step 1 — Authenticating"[m
+[32m+[m
+[32m+[m[32mif [ -z "$RC_PASSWORD" ]; then[m
+[32m+[m[32m    read -s -p "Enter Rocket.Chat admin password for user '$RC_USERNAME': " RC_PASSWORD[m
+[32m+[m[32m    echo ""[m
+[32m+[m[32mfi[m
+ [m
+ LOGIN=$(curl -s -X POST "$RC_URL/api/v1/login" \[m
+     -H 'Content-Type: application/json' \[m
+     -d "{\"username\":\"$RC_USERNAME\",\"password\":\"$RC_PASSWORD\"}")[m
+ [m
+[31m-LOGIN_STATUS=$(echo "$LOGIN" | python3 -c "import sys,json; print(json.load(sys.stdin).get('status','fail'))" 2>/dev/null || echo "fail")[m
+[31m-[ "$LOGIN_STATUS" != "success" ] && error "Login failed. Check password."[m
+[32m+[m[32mLOGIN_STATUS=$(echo "$LOGIN" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('status','fail'))" 2>/dev/null || echo "fail")[m
+[32m+[m
+[32m+[m[32mif [ "$LOGIN_STATUS" != "success" ]; then[m
+[32m+[m[32m    error "Login failed. Check RC_USERNAME and RC_PASSWORD in .env file."[m
+[32m+[m[32mfi[m
+[32m+[m
+[32m+[m[32mTOKEN=$(echo "$LOGIN" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['data']['authToken'])")[m
+[32m+[m[32mUSERID=$(echo "$LOGIN" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['data']['userId'])")[m
+[32m+[m[32mUSERNAME=$(echo "$LOGIN" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['data']['me']['username'])")[m
+[32m+[m
+[32m+[m[32msuccess "Logged in as: $USERNAME (ID: $USERID)"[m
+[32m+[m
+[32m+[m[32m# ─── STEP 2: Ensure admin role ────────────────────────────────────[m
+[32m+[m[32mheader "Step 2 — Verifying Admin Role"[m
+ [m
+[31m-TOKEN=$(echo "$LOGIN" | python3 -c "import sys,json; print(json.load(sys.stdin)['data']['authToken'])")[m
+[31m-USERID=$(echo "$LOGIN" | python3 -c "import sys,json; print(json.load(sys.stdin)['data']['userId'])")[m
+[31m-success "Logged in as $RC_USERNAME"[m
+[32m+[m[32mROLES=$(echo "$LOGIN" | python3 -c "import sys,json; d=json.load(sys.stdin); print(','.join(d['data']['me'].get('roles',[])))" 2>/dev/null || echo "")[m
+ [m
+[31m-# STEP 2 — Enable server settings[m
+[31m-header "Step 2 — Enabling Server Settings"[m
+[31m-for SETTING in Apps_Framework_enabled Apps_Framework_Development_Mode Message_AllowCustomFields; do[m
+[32m+[m[32mif echo "$ROLES" | grep -q "admin"; then[m
+[32m+[m[32m    success "User has admin role: $ROLES"[m
+[32m+[m[32melse[m
+[32m+[m[32m    warn "User missing admin role. Granting via MongoDB..."[m
+[32m+[m[32m    docker exec -it rockect_chat-mongodb-1 mongo rocketchat --quiet --eval \[m
+[32m+[m[32m        "db.users.updateOne({username:'$RC_USERNAME'},{\$set:{roles:['admin','user']}})" \[m
+[32m+[m[32m        2>/dev/null || warn "Could not update role via MongoDB (may already be admin)"[m
+[32m+[m[32m    warn "Please logout and login again in browser if admin panel is still inaccessible."[m
+[32m+[m[32mfi[m
+[32m+[m
+[32m+[m[32m# ─── STEP 3: Enable required settings ─────────────────────────────[m
+[32m+[m[32mheader "Step 3 — Enabling Required Server Settings"[m
+[32m+[m
+[32m+[m[32mSETTINGS=([m
+[32m+[m[32m    "Apps_Framework_enabled:true"[m
+[32m+[m[32m    "Apps_Framework_Development_Mode:true"[m
+[32m+[m[32m    "Message_AllowCustomFields:true"[m
+[32m+[m[32m    "Message_CustomFields:ugajapa_translation:string"[m
+[32m+[m[32m    "Apps_Logs_Level:2"[m
+[32m+[m[32m)[m
+[32m+[m
+[32m+[m[32mfor setting in "${SETTINGS[@]}"; do[m
+[32m+[m[32m    KEY="${setting%%:*}"[m
+[32m+[m[32m    VAL="${setting#*:}"[m
+     docker exec rockect_chat-mongodb-1 mongo rocketchat --quiet --eval \[m
+[31m-        "db.rocketchat_settings.updateOne({_id:'$SETTING'},{\$set:{value:true}},{upsert:true})" \[m
+[31m-        > /dev/null 2>&1 && log "  Enabled: $SETTING"[m
+[32m+[m[32m        "db.rocketchat_settings.updateOne({_id:'$KEY'},{\$set:{value:true}},{upsert:true})" \[m
+[32m+[m[32m        > /dev/null 2>&1 && log "  Set $KEY = $VAL" || warn "  Could not set $KEY"[m
+ done[m
+[32m+[m
+ success "Server settings configured"[m
+ [m
+[31m-# STEP 3 — API Key[m
+[31m-header "Step 3 — API Key Setup"[m
+[32m+[m[32m# ─── STEP 4: Get API key ──────────────────────────────────────────[m
+[32m+[m[32mheader "Step 4 — Configuring AI Translation API Key"[m
+[32m+[m
+ if [ -z "$ANTHROPIC_API_KEY" ]; then[m
+     echo ""[m
+[31m-    echo "  1) NVIDIA NIM (FREE) — build.nvidia.com — key starts with nvapi-"[m
+[31m-    echo "  2) Anthropic Claude  — console.anthropic.com — key starts with sk-ant-"[m
+[31m-    echo "  3) Skip (demo mode — placeholder translations)"[m
+[32m+[m[32m    echo -e "${YELLOW}No API key found in .env (ANTHROPIC_API_KEY is empty).${NC}"[m
+[32m+[m[32m    echo ""[m
+[32m+[m[32m    echo "Options:"[m
+[32m+[m[32m    echo "  1) NVIDIA NIM (Free)  — https://build.nvidia.com  — starts with nvapi-"[m
+[32m+[m[32m    echo "  2) Anthropic Claude   — https://console.anthropic.com — starts with sk-ant-"[m
+[32m+[m[32m    echo "  3) Skip (use demo mode — placeholder translations)"[m
+     echo ""[m
+[31m-    read -p "Choose [1/2/3]: " CHOICE[m
+[31m-    case "$CHOICE" in[m
+[31m-        1|2) read -s -p "Paste API key: " ANTHROPIC_API_KEY; echo "" ;;[m
+[31m-        *)   warn "Using demo mode"; ANTHROPIC_API_KEY="" ;;[m
+[32m+[m[32m    read -p "Choose [1/2/3]: " API_CHOICE[m
+[32m+[m
+[32m+[m[32m    case "$API_CHOICE" in[m
+[32m+[m[32m        1|2)[m
+[32m+[m[32m            read -s -p "Paste your API key: " ANTHROPIC_API_KEY[m
+[32m+[m[32m            echo ""[m
+[32m+[m[32m            ;;[m
+[32m+[m[32m        3)[m
+[32m+[m[32m            warn "Skipping API key — demo mode will be used (placeholder translations)"[m
+[32m+[m[32m            ANTHROPIC_API_KEY=""[m
+[32m+[m[32m            ;;[m
+[32m+[m[32m        *)[m
+[32m+[m[32m            warn "Invalid choice — using demo mode"[m
+[32m+[m[32m            ANTHROPIC_API_KEY=""[m
+[32m+[m[32m            ;;[m
+     esac[m
+ fi[m
+ [m
+[32m+[m[32m# Detect API type and update service URL[m
+ if [[ "$ANTHROPIC_API_KEY" == nvapi-* ]]; then[m
+     API_TYPE="NVIDIA NIM"[m
+[31m-    log "Testing NVIDIA key..."[m
+[32m+[m[32m    log "Detected NVIDIA NIM API key"[m
+[32m+[m
+[32m+[m[32m    # Verify the key works[m
+[32m+[m[32m    log "Testing NVIDIA API key..."[m
+     TEST=$(curl -s https://integrate.api.nvidia.com/v1/chat/completions \[m
+         -H "Authorization: Bearer $ANTHROPIC_API_KEY" \[m
+         -H "Content-Type: application/json" \[m
+[31m-        -d '{"model":"meta/llama-3.3-70b-instruct","messages":[{"role":"user","content":"Say hello in Japanese in one word"}],"max_tokens":20,"stream":false}' 2>/dev/null)[m
+[32m+[m[32m        -d '{"model":"meta/llama-3.3-70b-instruct","messages":[{"role":"user","content":"Say OK"}],"max_tokens":10,"stream":false}' \[m
+[32m+[m[32m        2>/dev/null)[m
+     if echo "$TEST" | grep -q "choices"; then[m
+[31m-        SAMPLE=$(echo "$TEST" | python3 -c "import sys,json; print(json.load(sys.stdin)['choices'][0]['message']['content'][:50])" 2>/dev/null)[m
+[31m-        success "NVIDIA API working! Response: $SAMPLE"[m
+[32m+[m[32m        success "NVIDIA API key is valid and working"[m
+     else[m
+[31m-        warn "NVIDIA test: $(echo "$TEST" | head -c 150)"[m
+[32m+[m[32m        warn "NVIDIA API test returned: $(echo "$TEST" | head -c 200)"[m
+[32m+[m[32m        warn "Continuing anyway..."[m
+     fi[m
+[32m+[m
+ elif [[ "$ANTHROPIC_API_KEY" == sk-ant-* ]]; then[m
+     API_TYPE="Anthropic Claude"[m
+[31m-    success "Anthropic key detected"[m
+[32m+[m[32m    log "Detected Anthropic Claude API key"[m
+ else[m
+     API_TYPE="Demo mode"[m
+[31m-    warn "No valid key — demo mode active"[m
+[32m+[m[32m    warn "No valid API key — using demo mode"[m
+ fi[m
+ [m
+[31m-# Save to .env[m
+[32m+[m[32m# Save key to .env[m
+ if [ -n "$ANTHROPIC_API_KEY" ]; then[m
+[31m-    sed -i "s|^ANTHROPIC_API_KEY=.*|ANTHROPIC_API_KEY=$ANTHROPIC_API_KEY|" "$ROOT_DIR/.env" 2>/dev/null || \[m
+[32m+[m[32m    if grep -q "^ANTHROPIC_API_KEY=" "$ROOT_DIR/.env" 2>/dev/null; then[m
+[32m+[m[32m        sed -i "s|^ANTHROPIC_API_KEY=.*|ANTHROPIC_API_KEY=$ANTHROPIC_API_KEY|" "$ROOT_DIR/.env"[m
+[32m+[m[32m    else[m
+         echo "ANTHROPIC_API_KEY=$ANTHROPIC_API_KEY" >> "$ROOT_DIR/.env"[m
+[31m-    success "Key saved to .env"[m
+[32m+[m[32m    fi[m
+[32m+[m[32m    success "API key saved to .env"[m
+ fi[m
+ [m
+[31m-# STEP 4 — Build & deploy[m
+[31m-header "Step 4 — Building & Deploying Plugin"[m
+[32m+[m[32m# ─── STEP 5: Build & deploy plugin ────────────────────────────────[m
+[32m+[m[32mheader "Step 5 — Building & Deploying UgaJapa Translation Plugin"[m
+[32m+[m
+ cd "$APP_DIR"[m
+[32m+[m[32mlog "Installing plugin dependencies..."[m
+ npm install --include=dev --silent 2>/dev/null || npm install --include=dev[m
+ [m
+[31m-if command -v rc-apps &>/dev/null; then RC_APPS="rc-apps"[m
+[31m-elif [ -x "./node_modules/.bin/rc-apps" ]; then RC_APPS="./node_modules/.bin/rc-apps"[m
+[31m-else RC_APPS="npx --yes @rocket.chat/apps-cli"; fi[m
+[32m+[m[32mlog "Packaging plugin..."[m
+[32m+[m[32mif command -v rc-apps &>/dev/null; then[m
+[32m+[m[32m    RC_APPS_CMD="rc-apps"[m
+[32m+[m[32melif [ -x "$APP_DIR/node_modules/.bin/rc-apps" ]; then[m
+[32m+[m[32m    RC_APPS_CMD="$APP_DIR/node_modules/.bin/rc-apps"[m
+[32m+[m[32melse[m
+[32m+[m[32m    RC_APPS_CMD="npx --yes @rocket.chat/apps-cli"[m
+[32m+[m[32mfi[m
+ [m
+[31m-$RC_APPS package 2>/dev/null || $RC_APPS package[m
+[32m+[m[32m$RC_APPS_CMD package 2>/dev/null[m
+ ZIP="$APP_DIR/dist/ugajapa-translation_1.0.0.zip"[m
+[31m-[ ! -f "$ZIP" ] && error "Package failed. Check TypeScript errors."[m
+[31m-success "Plugin packaged ($(du -sh "$ZIP" | cut -f1))"[m
+[32m+[m
+[32m+[m[32mif [ ! -f "$ZIP" ]; then[m
+[32m+[m[32m    error "Plugin package not found at $ZIP. Check TypeScript errors above."[m
+[32m+[m[32mfi[m
+[32m+[m
+[32m+[m[32msuccess "Plugin packaged: $ZIP ($(du -sh "$ZIP" | cut -f1))"[m
+ [m
+ cd "$ROOT_DIR"[m
+[31m-UPLOAD=$(curl -s -X POST "$RC_URL/api/apps/$APP_ID" \[m
+[32m+[m[32mlog "Uploading plugin to Rocket.Chat..."[m
+[32m+[m
+[32m+[m[32mUPLOAD=$(curl -s -X POST \[m
+[32m+[m[32m    "$RC_URL/api/apps/$APP_ID" \[m
+     -H "X-Auth-Token: $TOKEN" \[m
+     -H "X-User-Id: $USERID" \[m
+     -F "app=@$ZIP")[m
+[31m-APP_STATUS=$(echo "$UPLOAD" | python3 -c "import sys,json; print(json.load(sys.stdin).get('app',{}).get('status','?'))" 2>/dev/null || echo "?")[m
+[31m-success "Plugin deployed: $APP_STATUS"[m
+ [m
+[31m-# STEP 5 — Configure plugin[m
+[31m-header "Step 5 — Configuring Plugin"[m
+[31m-SAVE=$(curl -s -X POST "$RC_URL/api/apps/$APP_ID/settings" \[m
+[32m+[m[32mAPP_STATUS=$(echo "$UPLOAD" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('app',{}).get('status','unknown'))" 2>/dev/null || echo "unknown")[m
+[32m+[m[32mAPP_SUCCESS=$(echo "$UPLOAD" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('success','false'))" 2>/dev/null || echo "false")[m
+[32m+[m
+[32m+[m[32mif [ "$APP_STATUS" = "auto_enabled" ] || [ "$APP_STATUS" = "manually_enabled" ]; then[m
+[32m+[m[32m    success "Plugin deployed: status = $APP_STATUS"[m
+[32m+[m[32melse[m
+[32m+[m[32m    warn "Upload returned: $(echo "$UPLOAD" | head -c 300)"[m
+[32m+[m[32m    warn "Attempting to continue..."[m
+[32m+[m[32mfi[m
+[32m+[m
+[32m+[m[32m# ─── STEP 6: Configure plugin settings ────────────────────────────[m
+[32m+[m[32mheader "Step 6 — Configuring Plugin Settings"[m
+[32m+[m
+[32m+[m[32mSETTINGS_PAYLOAD="{[m
+[32m+[m[32m    \"settings\": [[m
+[32m+[m[32m        {\"id\": \"ugajapa_claude_api_key\",       \"value\": \"$ANTHROPIC_API_KEY\"},[m
+[32m+[m[32m        {\"id\": \"ugajapa_default_target_lang\",   \"value\": \"ja\"},[m
+[32m+[m[32m        {\"id\": \"ugajapa_auto_translate\",         \"value\": true},[m
+[32m+[m[32m        {\"id\": \"ugajapa_show_hints\",             \"value\": true}[m
+[32m+[m[32m    ][m
+[32m+[m[32m}"[m
+[32m+[m
+[32m+[m[32mSETTINGS_RESULT=$(curl -s -X POST \[m
+[32m+[m[32m    "$RC_URL/api/apps/$APP_ID/settings" \[m
+     -H "X-Auth-Token: $TOKEN" \[m
+     -H "X-User-Id: $USERID" \[m
+     -H "Content-Type: application/json" \[m
+[31m-    -d "{\"settings\":[[m
+[31m-        {\"id\":\"ugajapa_claude_api_key\",\"value\":\"$ANTHROPIC_API_KEY\"},[m
+[31m-        {\"id\":\"ugajapa_default_target_lang\",\"value\":\"ja\"},[m
+[31m-        {\"id\":\"ugajapa_auto_translate\",\"value\":true},[m
+[31m-        {\"id\":\"ugajapa_show_hints\",\"value\":true}[m
+[31m-    ]}")[m
+[31m-echo "$SAVE" | grep -q '"success":true' && success "Settings saved" || warn "Settings: $(echo "$SAVE" | head -c 150)"[m
+[31m-[m
+[31m-# STEP 6 — Create channels[m
+[31m-header "Step 6 — Creating Channels"[m
+[31m-for CHAN in uganda-japan ugajapa-general translation-test; do[m
+[32m+[m[32m    -d "$SETTINGS_PAYLOAD")[m
+[32m+[m
+[32m+[m[32mif echo "$SETTINGS_RESULT" | grep -q '"success":true'; then[m
+[32m+[m[32m    success "Plugin settings saved"[m
+[32m+[m[32m    log "  API key:           $([ -n "$ANTHROPIC_API_KEY" ] && echo "SET ($API_TYPE)" || echo "EMPTY (demo mode)")"[m
+[32m+[m[32m    log "  Default language:  Japanese (ja)"[m
+[32m+[m[32m    log "  Auto-translate:    Enabled"[m
+[32m+[m[32m    log "  Cultural hints:    Enabled"[m
+[32m+[m[32melse[m
+[32m+[m[32m    warn "Settings save returned: $(echo "$SETTINGS_RESULT" | head -c 200)"[m
+[32m+[m[32mfi[m
+[32m+[m
+[32m+[m[32m# ─── STEP 7: Create test channels ─────────────────────────────────[m
+[32m+[m[32mheader "Step 7 — Setting Up Test Channels"[m
+[32m+[m
+[32m+[m[32mcreate_channel() {[m
+[32m+[m[32m    local NAME="$1"[m
+[32m+[m[32m    local RESULT[m
+     RESULT=$(curl -s -X POST "$RC_URL/api/v1/channels.create" \[m
+[31m-        -H "X-Auth-Token: $TOKEN" -H "X-User-Id: $USERID" \[m
+[32m+[m[32m        -H "X-Auth-Token: $TOKEN" \[m
+[32m+[m[32m        -H "X-User-Id: $USERID" \[m
+         -H "Content-Type: application/json" \[m
+[31m-        -d "{\"name\":\"$CHAN\"}" 2>/dev/null)[m
+[32m+[m[32m        -d "{\"name\":\"$NAME\"}" 2>/dev/null)[m
+[32m+[m
+     if echo "$RESULT" | grep -q '"success":true'; then[m
+[31m-        success "Created #$CHAN"[m
+[32m+[m[32m        ROOM_ID=$(echo "$RESULT" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['channel']['_id'])" 2>/dev/null)[m
+[32m+[m[32m        success "Created channel #$NAME (ID: $ROOM_ID)"[m
+[32m+[m[32m        echo "$ROOM_ID"[m
+     else[m
+[31m-        log "#$CHAN already exists"[m
+[32m+[m[32m        # Channel may already exist[m
+[32m+[m[32m        EXISTING=$(curl -s "$RC_URL/api/v1/channels.info?roomName=$NAME" \[m
+[32m+[m[32m            -H "X-Auth-Token: $TOKEN" \[m
+[32m+[m[32m            -H "X-User-Id: $USERID" 2>/dev/null)[m
+[32m+[m[32m        ROOM_ID=$(echo "$EXISTING" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('channel',{}).get('_id',''))" 2>/dev/null || echo "")[m
+[32m+[m[32m        if [ -n "$ROOM_ID" ]; then[m
+[32m+[m[32m            log "Channel #$NAME already exists (ID: $ROOM_ID)"[m
+[32m+[m[32m            echo "$ROOM_ID"[m
+[32m+[m[32m        else[m
+[32m+[m[32m            echo ""[m
+[32m+[m[32m        fi[m
+[32m+[m[32m    fi[m
+[32m+[m[32m}[m
+[32m+[m
+[32m+[m[32mUG_JP_ROOM=$(create_channel "uganda-japan")[m
+[32m+[m[32mGENERAL_ROOM=$(create_channel "ugajapa-general")[m
+[32m+[m[32mTEST_ROOM=$(create_channel "translation-test")[m
+[32m+[m
+[32m+[m[32m# Set language on channels[m
+[32m+[m[32mfor ROOM_ID in $UG_JP_ROOM $GENERAL_ROOM $TEST_ROOM; do[m
+[32m+[m[32m    if [ -n "$ROOM_ID" ]; then[m
+[32m+[m[32m        # Post a /set-language ja message via API as a bot command[m
+[32m+[m[32m        curl -s -X POST "$RC_URL/api/v1/chat.sendMessage" \[m
+[32m+[m[32m            -H "X-Auth-Token: $TOKEN" \[m
+[32m+[m[32m            -H "X-User-Id: $USERID" \[m
+[32m+[m[32m            -H "Content-Type: application/json" \[m
+[32m+[m[32m            -d "{\"message\":{\"rid\":\"$ROOM_ID\",\"msg\":\"/set-language ja\"}}" \[m
+[32m+[m[32m            > /dev/null 2>&1 || true[m
+     fi[m
+ done[m
+ [m
+[31m-# STEP 7 — Send language setup to test channel[m
+[31m-header "Step 7 — Configuring Translation Channels"[m
+[31m-TEST_ROOM=$(curl -s "$RC_URL/api/v1/channels.info?roomName=translation-test" \[m
+[31m-    -H "X-Auth-Token: $TOKEN" -H "X-User-Id: $USERID" | \[m
+[31m-    python3 -c "import sys,json; print(json.load(sys.stdin).get('channel',{}).get('_id',''))" 2>/dev/null || echo "")[m
+[32m+[m[32msuccess "Channels created and configured for Japanese translation"[m
+ [m
+[31m-if [ -n "$TEST_ROOM" ]; then[m
+[31m-    curl -s -X POST "$RC_URL/api/v1/chat.sendMessage" \[m
+[31m-        -H "X-Auth-Token: $TOKEN" -H "X-User-Id: $USERID" \[m
+[31m-        -H "Content-Type: application/json" \[m
+[31m-        -d "{\"message\":{\"rid\":\"$TEST_ROOM\",\"msg\":\"/set-language ja\"}}" > /dev/null 2>&1 || true[m
+[31m-    success "Translation-test channel set to Japanese"[m
+[32m+[m[32m# ─── STEP 8: Verify everything ────────────────────────────────────[m
+[32m+[m[32mheader "Step 8 — Final Verification"[m
+ [m
+[31m-    # Send a welcome message[m
+[31m-    curl -s -X POST "$RC_URL/api/v1/chat.sendMessage" \[m
+[31m-        -H "X-Auth-Token: $TOKEN" -H "X-User-Id: $USERID" \[m
+[31m-        -H "Content-Type: application/json" \[m
+[31m-        -d "{\"message\":{\"rid\":\"$TEST_ROOM\",\"msg\":\"UgaJapa Connect is now fully configured! Send any English or Luganda message to see it translated to Japanese in real time. Try: 'Hello, how is the project going today?' \"}}" > /dev/null 2>&1 || true[m
+[31m-fi[m
+[32m+[m[32m# Check app status[m
+[32m+[m[32mAPP_CHECK=$(curl -s "$RC_URL/api/apps" \[m
+[32m+[m[32m    -H "X-Auth-Token: $TOKEN" \[m
+[32m+[m[32m    -H "X-User-Id: $USERID" 2>/dev/null)[m
+ [m
+[31m-# FINAL STATUS[m
+[32m+[m[32mAPP_INFO=$(echo "$APP_CHECK" | python3 -c "[m
+[32m+[m[32mimport sys,json[m
+[32m+[m[32md=json.load(sys.stdin)[m
+[32m+[m[32mfor app in d.get('apps',[]):[m
+[32m+[m[32m    if 'ugajapa' in app.get('nameSlug','').lower() or 'ugajapa' in app.get('name','').lower():[m
+[32m+[m[32m        print(app.get('name','?'), '|', app.get('status','?'), '|', app.get('version','?'))[m
+[32m+[m[32m" 2>/dev/null || echo "Could not verify")[m
+[32m+[m
+[32m+[m[32m# Check key is saved[m
+[32m+[m[32mKEY_CHECK=$(curl -s "$RC_URL/api/apps/$APP_ID/settings" \[m
+[32m+[m[32m    -H "X-Auth-Token: $TOKEN" \[m
+[32m+[m[32m    -H "X-User-Id: $USERID" 2>/dev/null | python3 -c "[m
+[32m+[m[32mimport sys,json[m
+[32m+[m[32md=json.load(sys.stdin)[m
+[32m+[m[32ms=d.get('settings',{})[m
+[32m+[m[32mkey=s.get('ugajapa_claude_api_key',{}).get('value','')[m
+[32m+[m[32mauto=s.get('ugajapa_auto_translate',{}).get('value',False)[m
+[32m+[m[32mhints=s.get('ugajapa_show_hints',{}).get('value',False)[m
+[32m+[m[32mprint('key=' + ('SET' if key else 'EMPTY') + ' auto=' + str(auto) + ' hints=' + str(hints))[m
+[32m+[m[32m" 2>/dev/null || echo "check failed")[m
+[32m+[m
+[32m+[m[32mecho ""[m
+[32m+[m[32mecho -e "${BOLD}${GREEN}═══════════════════════════════════════════════${NC}"[m
+[32m+[m[32mecho -e "${BOLD}${GREEN}   UgaJapa Connect — Setup Complete!           ${NC}"[m
+[32m+[m[32mecho -e "${BOLD}${GREEN}═══════════════════════════════════════════════${NC}"[m
+[32m+[m[32mecho ""[m
+[32m+[m[32mecho -e "  ${TEAL}Chat Server:${NC}     $RC_URL"[m
+[32m+[m[32mecho -e "  ${TEAL}Plugin Status:${NC}   $APP_INFO"[m
+[32m+[m[32mecho -e "  ${TEAL}Settings:${NC}        $KEY_CHECK"[m
+[32m+[m[32mecho -e "  ${TEAL}AI Engine:${NC}       $API_TYPE"[m
+ echo ""[m
+[31m-echo -e "${BOLD}${GREEN}╔══════════════════════════════════════════════╗${NC}"[m
+[31m-echo -e "${BOLD}${GREEN}║   UgaJapa Connect — Setup Complete!          ║${NC}"[m
+[31m-echo -e "${BOLD}${GREEN}╚══════════════════════════════════════════════╝${NC}"[m
+[32m+[m[32mecho -e "${BOLD}Quick Test:${NC}"[m
+[32m+[m[32mecho -e "  1. Open ${BLUE}$RC_URL${NC} in browser"[m
+[32m+[m[32mecho -e "  2. Login as ${BOLD}$RC_USERNAME${NC}"[m
+[32m+[m[32mecho -e "  3. Go to ${BOLD}#translation-test${NC} channel"[m
+[32m+[m[32mecho -e "  4. Type: ${BOLD}Hello, how is the project going today?${NC}"[m
+[32m+[m[32mecho -e "  5. You should see Japanese translation below your message"[m
+ echo ""[m
+[31m-echo -e "  ${TEAL}Server:${NC}      $RC_URL"[m
+[31m-echo -e "  ${TEAL}Plugin:${NC}      UgaJapa Translation ($APP_STATUS)"[m
+[31m-echo -e "  ${TEAL}AI Engine:${NC}   $API_TYPE"[m
+[31m-echo -e "  ${TEAL}Languages:${NC}   English / Luganda / Japanese"[m
+[32m+[m[32mecho -e "${BOLD}Slash Commands:${NC}"[m
+[32m+[m[32mecho -e "  ${YELLOW}/set-language ja${NC}  — set target to Japanese"[m
+[32m+[m[32mecho -e "  ${YELLOW}/set-language en${NC}  — set target to English"[m
+[32m+[m[32mecho -e "  ${YELLOW}/set-language lg${NC}  — set target to Luganda"[m
+[32m+[m[32mecho -e "  ${YELLOW}/translate <text>${NC} — translate privately"[m
+ echo ""[m
+[31m-echo -e "${BOLD}Test now:${NC}"[m
+[31m-echo -e "  1. Open ${BLUE}$RC_URL${NC}"[m
+[31m-echo -e "  2. Go to ${BOLD}#translation-test${NC}"[m
+[31m-echo -e "  3. Send: ${YELLOW}Hello, how is the project going?${NC}"[m
+[31m-echo -e "  4. See Japanese translation appear below message"[m
+[31m-echo -e "  5. Send: ${YELLOW}Webale nyo, oli otya?${NC} (Luganda)"[m
+[31m-echo -e "  6. Send: ${YELLOW}That might be a bit difficult...${NC} (cultural hint)"[m
+[32m+[m[32mecho -e "${BOLD}Cultural Intelligence:${NC}"[m
+[32m+[m[32mecho -e "  Try sending: ${YELLOW}That might be a bit difficult...${NC}"[m
+[32m+[m[32mecho -e "  You will see a cultural hint about indirect refusals in Japanese"[m
+ echo ""[m
+[31m-echo -e "${BOLD}Commands:${NC}  /set-language ja|en|lg   /translate <text>"[m
+[32m+[m[32mecho -e "${BOLD}Channels Ready:${NC}"[m
+[32m+[m[32mecho -e "  ${TEAL}#uganda-japan${NC}       — Main Uganda-Japan collaboration channel"[m
+[32m+[m[32mecho -e "  ${TEAL}#ugajapa-general${NC}    — General discussion"[m
+[32m+[m[32mecho -e "  ${TEAL}#translation-test${NC}   — Testing translations"[m
+ echo ""[m
+[31m-echo -e "${GREEN}System is live!${NC} ${TEAL}Uganda x Japan${NC}"[m
+[32m+[m[32mecho -e "${GREEN}System fully configured and ready!${NC} ${TEAL}UG x JP${NC}"[m
+[32m+[m[32mecho ""[m
+\ No newline at end of file[m
+[1mdiff --git a/stt-proxy/Dockerfile b/stt-proxy/Dockerfile[m
+[1mdeleted file mode 100644[m
+[1mindex 41887ee..0000000[m
+[1m--- a/stt-proxy/Dockerfile[m
+[1m+++ /dev/null[m
+[36m@@ -1,9 +0,0 @@[m
+[31m-FROM python:3.12-slim[m
+[31m-[m
+[31m-WORKDIR /app[m
+[31m-COPY requirements.txt .[m
+[31m-RUN pip install --no-cache-dir -r requirements.txt[m
+[31m-COPY server.py .[m
+[31m-[m
+[31m-EXPOSE 8090[m
+[31m-CMD ["uvicorn", "server:app", "--host", "0.0.0.0", "--port", "8090"][m
+[1mdiff --git a/stt-proxy/requirements.txt b/stt-proxy/requirements.txt[m
+[1mdeleted file mode 100644[m
+[1mindex 210fd0b..0000000[m
+[1m--- a/stt-proxy/requirements.txt[m
+[1m+++ /dev/null[m
+[36m@@ -1,3 +0,0 @@[m
+[31m-fastapi==0.115.12[m
+[31m-httpx==0.28.1[m
+[31m-uvicorn[standard]==0.34.2[m
+[1mdiff --git a/stt-proxy/server.py b/stt-proxy/server.py[m
+[1mdeleted file mode 100644[m
+[1mindex ff0066b..0000000[m
+[1m--- a/stt-proxy/server.py[m
+[1m+++ /dev/null[m
+[36m@@ -1,45 +0,0 @@[m
+[31m-import base64[m
+[31m-import os[m
+[31m-[m
+[31m-import httpx[m
+[31m-from fastapi import FastAPI, HTTPException[m
+[31m-from pydantic import BaseModel, Field[m
+[31m-[m
+[31m-app = FastAPI()[m
+[31m-STT_URL = os.environ.get("STT_URL", "http://speech-stt:8000/v1/audio/transcriptions")[m
+[31m-DEFAULT_MODEL = os.environ.get("WHISPER_MODEL", "Systran/faster-whisper-base")[m
+[31m-[m
+[31m-[m
+[31m-class TranscribeRequest(BaseModel):[m
+[31m-    audioBase64: str[m
+[31m-    mimeType: str = "audio/mpeg"[m
+[31m-    filename: str = "clip.mp3"[m
+[31m-    model: str = Field(default=DEFAULT_MODEL)[m
+[31m-[m
+[31m-[m
+[31m-@app.get("/health")[m
+[31m-def health():[m
+[31m-    return {"ok": True}[m
+[31m-[m
+[31m-[m
+[31m-@app.post("/v1/transcribe")[m
+[31m-async def transcribe(req: TranscribeRequest):[m
+[31m-    try:[m
+[31m-        audio = base64.b64decode(req.audioBase64, validate=True)[m
+[31m-    except Exception as exc:[m
+[31m-        raise HTTPException(status_code=400, detail=f"Invalid base64 audio: {exc}") from exc[m
+[31m-[m
+[31m-    if not audio:[m
+[31m-        raise HTTPException(status_code=400, detail="Empty audio payload")[m
+[31m-[m
+[31m-    async with httpx.AsyncClient(timeout=120.0) as client:[m
+[31m-        response = await client.post([m
+[31m-            STT_URL,[m
+[31m-            files={"file": (req.filename, audio, req.mimeType)},[m
+[31m-            data={"model": req.model, "vad_filter": "false"},[m
+[31m-        )[m
+[31m-[m
+[31m-    if response.status_code >= 400:[m
+[31m-        raise HTTPException(status_code=response.status_code, detail=response.text)[m
+[31m-[m
+[31m-    return response.json()[m
+[1mdiff --git a/ugajapa-translation-app/UgaJapaTranslationApp.ts b/ugajapa-translation-app/UgaJapaTranslationApp.ts[m
+[1mindex 010d235..eaa9eaf 100644[m
+[1m--- a/ugajapa-translation-app/UgaJapaTranslationApp.ts[m
+[1m+++ b/ugajapa-translation-app/UgaJapaTranslationApp.ts[m
+[36m@@ -4,29 +4,33 @@[m [mimport {[m
+     IEnvironmentRead,[m
+     IHttp,[m
+     ILogger,[m
+[31m-    IModify,[m
+     IPersistence,[m
+     IRead,[m
+ } from '@rocket.chat/apps-engine/definition/accessors';[m
+ import { App } from '@rocket.chat/apps-engine/definition/App';[m
+[31m-import { IMessage, IPostMessageSent, IPreMessageSentExtend } from '@rocket.chat/apps-engine/definition/messages';[m
+[32m+[m[32mimport { IMessage, IPreMessageSentExtend } from '@rocket.chat/apps-engine/definition/messages';[m
+ import { IAppInfo } from '@rocket.chat/apps-engine/definition/metadata';[m
+ import { SetLanguageCommand } from './commands/SetLanguageCommand';[m
+ import { TranslateCommand } from './commands/TranslateCommand';[m
+[32m+[m[32mimport { EvalStatsCommand } from './commands/EvalStatsCommand';[m
+ import { TranslationHandler } from './handlers/TranslationHandler';[m
+[31m-import { VoiceTranslationHandler } from './handlers/VoiceTranslationHandler';[m
+ import { AppSettings } from './settings/AppSettings';[m
+ [m
+[31m-export class UgaJapaTranslationApp extends App implements IPreMessageSentExtend, IPostMessageSent {[m
+[32m+[m[32mexport class UgaJapaTranslationApp extends App implements IPreMessageSentExtend {[m
+     constructor(info: IAppInfo, logger: ILogger, accessors: IAppAccessors) {[m
+         super(info, logger, accessors);[m
+     }[m
+ [m
+[31m-    public async extendConfiguration(configuration: IConfigurationExtend, environmentRead: IEnvironmentRead): Promise<void> {[m
+[31m-        await Promise.all(AppSettings.map((setting) => configuration.settings.provideSetting(setting)));[m
+[31m-[m
+[32m+[m[32m    public async extendConfiguration([m
+[32m+[m[32m        configuration: IConfigurationExtend,[m
+[32m+[m[32m        environmentRead: IEnvironmentRead,[m
+[32m+[m[32m    ): Promise<void> {[m
+[32m+[m[32m        await Promise.all([m
+[32m+[m[32m            AppSettings.map((setting) => configuration.settings.provideSetting(setting)),[m
+[32m+[m[32m        );[m
+         configuration.slashCommands.provideSlashCommand(new SetLanguageCommand());[m
+         configuration.slashCommands.provideSlashCommand(new TranslateCommand());[m
+[32m+[m[32m        configuration.slashCommands.provideSlashCommand(new EvalStatsCommand());[m
+     }[m
+ [m
+     public async onEnable(): Promise<boolean> {[m
+[36m@@ -34,10 +38,15 @@[m [mexport class UgaJapaTranslationApp extends App implements IPreMessageSentExtend,[m
+         return true;[m
+     }[m
+ [m
+[31m-    public async checkPreMessageSentExtend(message: IMessage, read: IRead, http: IHttp): Promise<boolean> {[m
+[31m-        const text = message.text?.trim();[m
+[31m-        if (!text || message.customFields?.ugajapa_translation) return false;[m
+[31m-        if (text.startsWith('/')) return false;[m
+[32m+[m[32m    public async checkPreMessageSentExtend([m
+[32m+[m[32m        message: IMessage,[m
+[32m+[m[32m        read: IRead,[m
+[32m+[m[32m        http: IHttp,[m
+[32m+[m[32m    ): Promise<boolean> {[m
+[32m+[m[32m        const txt = message.text;[m
+[32m+[m[32m        if (!txt || !txt.trim()) return false;[m
+[32m+[m[32m        const cf = message.customFields;[m
+[32m+[m[32m        if (cf && cf.ugajapa_translation) return false;[m
+         return true;[m
+     }[m
+ [m
+[36m@@ -50,23 +59,4 @@[m [mexport class UgaJapaTranslationApp extends App implements IPreMessageSentExtend,[m
+     ): Promise<IMessage> {[m
+         return TranslationHandler.execute(message, extend, read, http);[m
+     }[m
+[31m-[m
+[31m-    public async checkPostMessageSent(message: IMessage, read: IRead, http: IHttp): Promise<boolean> {[m
+[31m-        if (!VoiceTranslationHandler.isTranslatableMedia(message)) return false;[m
+[31m-[m
+[31m-        const enabled = await read.getEnvironmentReader().getSettings().getValueById('ugajapa_translate_voice');[m
+[31m-        if (enabled === false) return false;[m
+[31m-[m
+[31m-        return !(await VoiceTranslationHandler.alreadyProcessed(read, VoiceTranslationHandler.getMediaFile(message)!._id));[m
+[31m-    }[m
+[31m-[m
+[31m-    public async executePostMessageSent([m
+[31m-        message: IMessage,[m
+[31m-        read: IRead,[m
+[31m-        http: IHttp,[m
+[31m-        persistence: IPersistence,[m
+[31m-        modify: IModify,[m
+[31m-    ): Promise<void> {[m
+[31m-        await VoiceTranslationHandler.execute(message, read, http, persistence, modify);[m
+[31m-    }[m
+ }[m
+[1mdiff --git a/ugajapa-translation-app/app.json b/ugajapa-translation-app/app.json[m
+[1mindex 5e90e7c..01e3bec 100644[m
+[1m--- a/ugajapa-translation-app/app.json[m
+[1m+++ b/ugajapa-translation-app/app.json[m
+[36m@@ -1,6 +1,6 @@[m
+ {[m
+     "id": "f47ac10b-58cc-4372-a567-0e02b2c3d479",[m
+[31m-    "version": "1.0.10",[m
+[32m+[m[32m    "version": "1.0.0",[m
+     "requiredApiVersion": "^1.44.0",[m
+     "iconFile": "icon.png",[m
+     "author": {[m
+[36m@@ -43,16 +43,9 @@[m
+         },[m
+         {[m
+             "name": "env.read"[m
+[31m-        },[m
+[31m-        {[m
+[31m-            "name": "upload.read"[m
+[31m-        },[m
+[31m-        {[m
+[31m-            "name": "upload.write"[m
+         }[m
+     ],[m
+     "implements": [[m
+[31m-        "IPreMessageSentExtend",[m
+[31m-        "IPostMessageSent"[m
+[32m+[m[32m        "IPreMessageSentExtend"[m
+     ][m
+ }[m
+\ No newline at end of file[m
+[1mdiff --git a/ugajapa-translation-app/commands/EvalStatsCommand.ts b/ugajapa-translation-app/commands/EvalStatsCommand.ts[m
+[1mnew file mode 100644[m
+[1mindex 0000000..0171ab9[m
+[1m--- /dev/null[m
+[1m+++ b/ugajapa-translation-app/commands/EvalStatsCommand.ts[m
+[36m@@ -0,0 +1,50 @@[m
+[32m+[m[32mimport { IHttp, IModify, IPersistence, IRead } from '@rocket.chat/apps-engine/definition/accessors';[m
+[32m+[m[32mimport { ISlashCommand, SlashCommandContext } from '@rocket.chat/apps-engine/definition/slashcommands';[m
+[32m+[m
+[32m+[m[32mexport class EvalStatsCommand implements ISlashCommand {[m
+[32m+[m[32m    public command = 'eval-stats';[m
+[32m+[m[32m    public i18nParamsExample = '';[m
+[32m+[m[32m    public i18nDescription = 'Show translation evaluation statistics for this channel';[m
+[32m+[m[32m    public providesPreview = false;[m
+[32m+[m
+[32m+[m[32m    public async executor([m
+[32m+[m[32m        context: SlashCommandContext,[m
+[32m+[m[32m        read: IRead,[m
+[32m+[m[32m        modify: IModify,[m
+[32m+[m[32m        http: IHttp,[m
+[32m+[m[32m        persis: IPersistence,[m
+[32m+[m[32m    ): Promise<void> {[m
+[32m+[m[32m        const roomId = context.getRoom().id;[m
+[32m+[m
+[32m+[m[32m        // Read evaluation records from persistence[m
+[32m+[m[32m        const { RocketChatAssociationModel, RocketChatAssociationRecord } =[m
+[32m+[m[32m            await import('@rocket.chat/apps-engine/definition/metadata');[m
+[32m+[m
+[32m+[m[32m        const assoc = new RocketChatAssociationRecord([m
+[32m+[m[32m            RocketChatAssociationModel.ROOM, `eval_${roomId}`[m
+[32m+[m[32m        );[m
+[32m+[m
+[32m+[m[32m        const records = await read.getPersistenceReader().readByAssociation(assoc);[m
+[32m+[m[32m        const stats = records[0] as any || { good: 0, poor: 0, inaccurate: 0, total: 0 };[m
+[32m+[m
+[32m+[m[32m        const total = stats.total || 0;[m
+[32m+[m[32m        const good = stats.good || 0;[m
+[32m+[m[32m        const poor = stats.poor || 0;[m
+[32m+[m[32m        const inaccurate = stats.inaccurate || 0;[m
+[32m+[m
+[32m+[m[32m        const pct = (n: number) => total > 0 ? Math.round((n/total)*100) + '%' : 'N/A';[m
+[32m+[m
+[32m+[m[32m        const msg =[m
+[32m+[m[32m            `📊 *Translation Evaluation Statistics — #${context.getRoom().slugifiedName}*\n\n` +[m
+[32m+[m[32m            `Total evaluations: *${total}*\n` +[m
+[32m+[m[32m            `✅ Good: *${good}* (${pct(good)})\n` +[m
+[32m+[m[32m            `👎 Poor: *${poor}* (${pct(poor)})\n` +[m
+[32m+[m[32m            `⚠️ Inaccurate: *${inaccurate}* (${pct(inaccurate)})\n\n` +[m
+[32m+[m[32m            `_React with ✅ 👎 ⚠️ on any translated message to submit your evaluation_`;[m
+[32m+[m
+[32m+[m[32m        const builder = modify.getNotifier().getMessageBuilder()[m
+[32m+[m[32m            .setText(msg)[m
+[32m+[m[32m            .setRoom(context.getRoom());[m
+[32m+[m[32m        await modify.getNotifier().notifyUser(context.getSender(), builder.getMessage());[m
+[32m+[m[32m    }[m
+[32m+[m[32m}[m
+[1mdiff --git a/ugajapa-translation-app/handlers/TranslationHandler.ts b/ugajapa-translation-app/handlers/TranslationHandler.ts[m
+[1mindex d993b08..d4ad489 100644[m
+[1m--- a/ugajapa-translation-app/handlers/TranslationHandler.ts[m
+[1m+++ b/ugajapa-translation-app/handlers/TranslationHandler.ts[m
+[36m@@ -1,4 +1,4 @@[m
+[31m-import { IHttp, IMessageExtender, IRead } from '@rocket.chat/apps-engine/definition/accessors';[m
+[32m+[m[32mimport { IHttp, IMessageExtender, IRead, IModify } from '@rocket.chat/apps-engine/definition/accessors';[m
+ import { IMessage } from '@rocket.chat/apps-engine/definition/messages';[m
+ import { ClaudeTranslationService } from '../services/ClaudeTranslationService';[m
+ import { LanguageDetectionService, SupportedLanguage } from '../services/LanguageDetectionService';[m
+[36m@@ -14,19 +14,31 @@[m [mexport class TranslationHandler {[m
+         try {[m
+             const text = message.text?.trim();[m
+             if (!text) return message;[m
+[32m+[m[32m            if (text.length < 3) return message;[m
+ [m
+             const sourceLang = LanguageDetectionService.detect(text);[m
+[31m-            const targetLang = (await RoomLanguageService.getLanguage(read, message.room.id)) || 'ja';[m
+[32m+[m[32m            const roomTargetLang = await RoomLanguageService.getLanguage(read, message.room.id);[m
+[32m+[m
+[32m+[m[32m            let targetLang: SupportedLanguage;[m
+[32m+[m[32m            if (sourceLang === 'ja') {[m
+[32m+[m[32m                targetLang = 'en';[m
+[32m+[m[32m            } else {[m
+[32m+[m[32m                targetLang = (roomTargetLang as SupportedLanguage) || 'ja';[m
+[32m+[m[32m            }[m
+ [m
+             if (sourceLang === targetLang) return message;[m
+ [m
+[32m+[m[32m            const autoTranslate = await read.getEnvironmentReader()[m
+[32m+[m[32m                .getSettings().getValueById('ugajapa_auto_translate') as boolean;[m
+[32m+[m[32m            if (autoTranslate === false) return message;[m
+[32m+[m
+             const apiKey = await read.getEnvironmentReader()[m
+                 .getSettings().getValueById('ugajapa_claude_api_key') as string;[m
+ [m
+             if (!apiKey || !apiKey.trim()) {[m
+                 extend.addAttachment({[m
+                     color: '#F4A523',[m
+[31m-                    text: `⚠️ *Demo mode* — No NVIDIA API key (nvapi-...).\n🌐 *[${sourceLang.toUpperCase()} → ${targetLang.toUpperCase()}]* Run ./scripts/configure-app.sh or add your key in Admin > Apps > UgaJapa Translation > Settings`,[m
+[32m+[m[32m                    text: `Demo mode — no API key set.`,[m
+                     collapsed: false,[m
+                 });[m
+                 return extend.getMessage();[m
+[36m@@ -35,19 +47,22 @@[m [mexport class TranslationHandler {[m
+             const result = await ClaudeTranslationService.translate({[m
+                 text,[m
+                 sourceLang,[m
+[31m-                targetLang: targetLang as SupportedLanguage,[m
+[32m+[m[32m                targetLang,[m
+                 apiKey,[m
+                 http,[m
+             });[m
+ [m
+[31m-            const showHints = await read.getEnvironmentReader()[m
+[31m-                .getSettings().getValueById('ugajapa_show_hints') as boolean;[m
+[32m+[m[32m            const langFlag: Record<SupportedLanguage, string> = {[m
+[32m+[m[32m                en: 'EN',[m
+[32m+[m[32m                lg: 'LG',[m
+[32m+[m[32m                ja: 'JA',[m
+[32m+[m[32m            };[m
+ [m
+[31m-            let attachText = `🌐 *[${sourceLang.toUpperCase()} → ${targetLang.toUpperCase()}]*\n${result.translation}`;[m
+[31m-[m
+[31m-            if (showHints !== false && result.culturalHint) {[m
+[31m-                attachText += `\n\n💡 *Cultural note:*\n${result.culturalHint}`;[m
+[31m-            }[m
+[32m+[m[32m            const attachText =[m
+[32m+[m[32m                `📝 *Original (${langFlag[sourceLang]}):* ${text}\n` +[m
+[32m+[m[32m                `🌐 *[${langFlag[sourceLang]} → ${langFlag[targetLang]}]:* ${result.translation}\n\n` +[m
+[32m+[m[32m                `*Was this translation helpful?*  ✅ Good  👎 Poor  ⚠️ Inaccurate\n` +[m
+[32m+[m[32m                `_React with an emoji above to evaluate this translation_`;[m
+ [m
+             extend.addAttachment({[m
+                 color: '#1D9E75',[m
+[1mdiff --git a/ugajapa-translation-app/handlers/VoiceTranslationHandler.ts b/ugajapa-translation-app/handlers/VoiceTranslationHandler.ts[m
+[1mdeleted file mode 100644[m
+[1mindex f5146ee..0000000[m
+[1m--- a/ugajapa-translation-app/handlers/VoiceTranslationHandler.ts[m
+[1m+++ /dev/null[m
+[36m@@ -1,115 +0,0 @@[m
+[31m-import { IHttp, IModify, IPersistence, IRead } from '@rocket.chat/apps-engine/definition/accessors';[m
+[31m-import { IMessage } from '@rocket.chat/apps-engine/definition/messages';[m
+[31m-import { RocketChatAssociationModel, RocketChatAssociationRecord } from '@rocket.chat/apps-engine/definition/metadata';[m
+[31m-import { ClaudeTranslationService } from '../services/ClaudeTranslationService';[m
+[31m-import { SpeechToTextService } from '../services/SpeechToTextService';[m
+[31m-import { TextToSpeechService } from '../services/TextToSpeechService';[m
+[31m-import { RoomLanguageService } from '../services/RoomLanguageService';[m
+[31m-import { SupportedLanguage } from '../services/LanguageDetectionService';[m
+[31m-[m
+[31m-export class VoiceTranslationHandler {[m
+[31m-    public static getMediaFile(message: IMessage) {[m
+[31m-        return message.files?.[0] ?? message.file;[m
+[31m-    }[m
+[31m-[m
+[31m-    public static isTranslatableMedia(message: IMessage): boolean {[m
+[31m-        const file = this.getMediaFile(message);[m
+[31m-        const group = file?.typeGroup;[m
+[31m-        const type = file?.type;[m
+[31m-        return Boolean(file && (group === 'audio' || group === 'video' || type?.startsWith('audio/') || type?.startsWith('video/')));[m
+[31m-    }[m
+[31m-[m
+[31m-    private static processedAssociation(fileId: string): RocketChatAssociationRecord {[m
+[31m-        return new RocketChatAssociationRecord(RocketChatAssociationModel.FILE, `ugajapa_voice_${fileId}`);[m
+[31m-    }[m
+[31m-[m
+[31m-    public static async alreadyProcessed(read: IRead, fileId: string): Promise<boolean> {[m
+[31m-        const records = await read.getPersistenceReader().readByAssociation(this.processedAssociation(fileId));[m
+[31m-        return records.length > 0;[m
+[31m-    }[m
+[31m-[m
+[31m-    public static async execute([m
+[31m-        message: IMessage,[m
+[31m-        read: IRead,[m
+[31m-        http: IHttp,[m
+[31m-        persistence: IPersistence,[m
+[31m-        modify: IModify,[m
+[31m-    ): Promise<void> {[m
+[31m-        const file = this.getMediaFile(message);[m
+[31m-        if (!file) return;[m
+[31m-[m
+[31m-        await persistence.createWithAssociation({ processedAt: new Date() }, this.processedAssociation(file._id));[m
+[31m-[m
+[31m-        const apiKey = (await read.getEnvironmentReader().getSettings().getValueById('ugajapa_claude_api_key')) as string;[m
+[31m-        const sttEndpoint = (await read.getEnvironmentReader().getSettings().getValueById('ugajapa_stt_endpoint')) as string;[m
+[31m-        const ttsEndpoint = (await read.getEnvironmentReader().getSettings().getValueById('ugajapa_tts_endpoint')) as string;[m
+[31m-        const targetLang = ((await RoomLanguageService.getLanguage(read, message.room.id)) || 'ja') as SupportedLanguage;[m
+[31m-[m
+[31m-        const audioBuffer = await read.getUploadReader().getBufferById(file._id);[m
+[31m-[m
+[31m-        const transcript = await SpeechToTextService.transcribe({[m
+[31m-            audio: audioBuffer,[m
+[31m-            mimeType: file.type || 'audio/ogg',[m
+[31m-            endpoint: sttEndpoint,[m
+[31m-            apiKey,[m
+[31m-            http,[m
+[31m-        });[m
+[31m-[m
+[31m-        if (transcript.demo) {[m
+[31m-            const reason = transcript.error || 'Speech-to-text failed';[m
+[31m-            const builder = modify.getNotifier().getMessageBuilder()[m
+[31m-                .setRoom(message.room)[m
+[31m-                .setText(`⚠️ *Voice translation failed:* ${reason}`);[m
+[31m-            await modify.getNotifier().notifyUser(message.sender, builder.getMessage());[m
+[31m-            return;[m
+[31m-        }[m
+[31m-[m
+[31m-        if (transcript.sourceLang === targetLang) return;[m
+[31m-[m
+[31m-        const translation = await ClaudeTranslationService.translate({[m
+[31m-            text: transcript.text,[m
+[31m-            sourceLang: transcript.sourceLang,[m
+[31m-            targetLang,[m
+[31m-            apiKey,[m
+[31m-            http,[m
+[31m-        });[m
+[31m-[m
+[31m-        const synthesized = await TextToSpeechService.synthesize({[m
+[31m-            text: translation.translation,[m
+[31m-            targetLang,[m
+[31m-            endpoint: ttsEndpoint,[m
+[31m-            apiKey,[m
+[31m-            http,[m
+[31m-        });[m
+[31m-[m
+[31m-        let captionText = `🎙️ *[${transcript.sourceLang.toUpperCase()} → ${targetLang.toUpperCase()}]*\n${translation.translation}`;[m
+[31m-        if (synthesized.demo && synthesized.error) {[m
+[31m-            captionText += `\n\n_(No audio reply: ${synthesized.error})_`;[m
+[31m-        }[m
+[31m-[m
+[31m-        const attachment = synthesized.audio[m
+[31m-            ? {[m
+[31m-                audioUrl: (await modify.getCreator().getUploadCreator().uploadBuffer(synthesized.audio, {[m
+[31m-                    filename: `translated-voice.${synthesized.mimeType.split('/')[1] || 'ogg'}`,[m
+[31m-                    room: message.room,[m
+[31m-                    user: message.sender,[m
+[31m-                })).url,[m
+[31m-                text: captionText,[m
+[31m-                collapsed: false,[m
+[31m-                color: '#1D9E75',[m
+[31m-            }[m
+[31m-            : { text: captionText, collapsed: false, color: '#F4A523' };[m
+[31m-[m
+[31m-        const members = await read.getRoomReader().getMembers(message.room.id);[m
+[31m-        const recipients = members.filter((member) => member.id !== message.sender.id);[m
+[31m-[m
+[31m-        await Promise.all([m
+[31m-            recipients.map((recipient) => {[m
+[31m-                const builder = modify.getNotifier().getMessageBuilder()[m
+[31m-                    .setRoom(message.room)[m
+[31m-                    .addAttachment(attachment);[m
+[31m-                return modify.getNotifier().notifyUser(recipient, builder.getMessage());[m
+[31m-            }),[m
+[31m-        );[m
+[31m-    }[m
+[31m-}[m
+[1mdiff --git a/ugajapa-translation-app/package-lock.json b/ugajapa-translation-app/package-lock.json[m
+[1mindex 4eaa756..fca16cb 100644[m
+[1m--- a/ugajapa-translation-app/package-lock.json[m
+[1m+++ b/ugajapa-translation-app/package-lock.json[m
+[36m@@ -1,12 +1,12 @@[m
+ {[m
+     "name": "ugajapa-translation-app",[m
+[31m-    "version": "1.0.7",[m
+[32m+[m[32m    "version": "1.0.0",[m
+     "lockfileVersion": 3,[m
+     "requires": true,[m
+     "packages": {[m
+         "": {[m
+             "name": "ugajapa-translation-app",[m
+[31m-            "version": "1.0.7",[m
+[32m+[m[32m            "version": "1.0.0",[m
+             "license": "MIT",[m
+             "devDependencies": {[m
+                 "@rocket.chat/apps-cli": "^1.11.0",[m
+[1mdiff --git a/ugajapa-translation-app/package.json b/ugajapa-translation-app/package.json[m
+[1mindex 311bc81..5860e54 100644[m
+[1m--- a/ugajapa-translation-app/package.json[m
+[1m+++ b/ugajapa-translation-app/package.json[m
+[36m@@ -1,6 +1,6 @@[m
+ {[m
+     "name": "ugajapa-translation-app",[m
+[31m-    "version": "1.0.7",[m
+[32m+[m[32m    "version": "1.0.0",[m
+     "description": "UgaJapa Connect — EN/Luganda ↔ Japanese translation for Rocket.Chat",[m
+     "main": "UgaJapaTranslationApp.js",[m
+     "license": "MIT",[m
+[1mdiff --git a/ugajapa-translation-app/services/LanguageDetectionService.ts b/ugajapa-translation-app/services/LanguageDetectionService.ts[m
+[1mindex 19d1dd0..3974c06 100644[m
+[1m--- a/ugajapa-translation-app/services/LanguageDetectionService.ts[m
+[1m+++ b/ugajapa-translation-app/services/LanguageDetectionService.ts[m
+[36m@@ -1,25 +1,68 @@[m
+ export type SupportedLanguage = 'en' | 'lg' | 'ja';[m
+ [m
+ const LUGANDA_MARKERS = [[m
+[31m-    'webale', 'oli otya', 'wasuze', 'gyebale', 'nze', 'ggwe', 'tuli', 'nkola',[m
+[31m-    'bulungi', 'mukama', 'ssebo', 'nyabo', 'kale', 'nnyabo', 'jangu',[m
+[32m+[m[32m    // Greetings[m
+[32m+[m[32m    'webale', 'oli otya', 'wasuze', 'gyebale', 'osiibye', 'osiibire',[m
+[32m+[m[32m    'waakiri', 'njagala', 'kale', 'eradde',[m
+[32m+[m[32m    // Pronouns[m
+[32m+[m[32m    'nze', 'ggwe', 'ye', 'ffe', 'mmwe', 'abo',[m
+[32m+[m[32m    'nkola', 'tuli', 'muli', 'bali',[m
+[32m+[m[32m    // Common words[m
+[32m+[m[32m    'bulungi', 'bubi', 'nnyabo', 'ssebo', 'mukama',[m
+[32m+[m[32m    'jangu', 'genda', 'jja', 'naye', 'era',[m
+[32m+[m[32m    'kubanga', 'kyokka', 'nga', 'bwe', 'oba',[m
+[32m+[m[32m    'mulimu', 'emirimu', 'ekibiina', 'omulimu',[m
+[32m+[m[32m    // Numbers[m
+[32m+[m[32m    'emu', 'bbiri', 'ssatu', 'nnya', 'ttaano',[m
+[32m+[m[32m    'mukaaga', 'musanvu', 'munaana', 'mwenda', 'kkumi',[m
+[32m+[m[32m    // Time[m
+[32m+[m[32m    'leero', 'jjo', 'enkya', 'bwembi', 'olwomukaaga',[m
+[32m+[m[32m    // Common phrases[m
+[32m+[m[32m    'gyebale ko', 'weebale', 'nsanyuse', 'nkusanyuse',[m
+[32m+[m[32m    'mpozzi', 'nkwagala', 'bambi', 'musawo',[m
+[32m+[m[32m    // Places / culture[m
+[32m+[m[32m    'buganda', 'kampala', 'uganda', 'baganda', 'luganda',[m
+[32m+[m[32m    // Verbs[m
+[32m+[m[32m    'okola', 'okuyiga', 'okubuuza', 'okugenda', 'okujangu',[m
+[32m+[m[32m    'okusoma', 'okukyala', 'okulya', 'okunywa', 'okutuula',[m
+[32m+[m[32m    // Question words[m
+[32m+[m[32m    'ndi', 'ki', 'wa', 'ludda', 'ddi', 'lwaki', 'ngati',[m
+[32m+[m[32m    // Conjunctions / connectors[m
+[32m+[m[32m    'nno', 'si', 'nedda', 'yee', 'ambe',[m
+ ];[m
+ [m
+ export class LanguageDetectionService {[m
+     public static detect(text: string): SupportedLanguage {[m
+         const normalized = text.toLowerCase().trim();[m
+ [m
+[32m+[m[32m        // Japanese: check Unicode ranges first (most reliable)[m
+         if (this.hasJapaneseCharacters(text)) {[m
+             return 'ja';[m
+         }[m
+ [m
+[31m-        if (LUGANDA_MARKERS.some((word) => normalized.includes(word))) {[m
+[32m+[m[32m        // Luganda: check for lexical markers[m
+[32m+[m[32m        const wordCount = LUGANDA_MARKERS.filter((word) =>[m
+[32m+[m[32m            normalized.includes(word)[m
+[32m+[m[32m        ).length;[m
+[32m+[m
+[32m+[m[32m        // If 1 or more Luganda markers found, classify as Luganda[m
+[32m+[m[32m        if (wordCount >= 1) {[m
+             return 'lg';[m
+         }[m
+ [m
+[32m+[m[32m        // Default to English[m
+         return 'en';[m
+     }[m
+ [m
+[32m+[m[32m    public static getLanguageName(code: SupportedLanguage): string {[m
+[32m+[m[32m        const names: Record<SupportedLanguage, string> = {[m
+[32m+[m[32m            en: 'English',[m
+[32m+[m[32m            lg: 'Luganda',[m
+[32m+[m[32m            ja: 'Japanese',[m
+[32m+[m[32m        };[m
+[32m+[m[32m        return names[code] ?? code;[m
+[32m+[m[32m    }[m
+[32m+[m
+     private static hasJapaneseCharacters(text: string): boolean {[m
+         return /[\u3040-\u30ff\u3400-\u4dbf\u4e00-\u9faf]/.test(text);[m
+     }[m
+[1mdiff --git a/ugajapa-translation-app/services/NvidiaMediaService.ts b/ugajapa-translation-app/services/NvidiaMediaService.ts[m
+[1mdeleted file mode 100644[m
+[1mindex 9211716..0000000[m
+[1m--- a/ugajapa-translation-app/services/NvidiaMediaService.ts[m
+[1m+++ /dev/null[m
+[36m@@ -1,213 +0,0 @@[m
+[31m-import { IHttp } from '@rocket.chat/apps-engine/definition/accessors';[m
+[31m-import { LanguageDetectionService, SupportedLanguage } from './LanguageDetectionService';[m
+[31m-[m
+[31m-export const DEFAULT_STT_URL = 'http://stt-proxy:8090/v1/transcribe';[m
+[31m-export const NVIDIA_STT_URL = 'https://integrate.api.nvidia.com/v1/audio/transcriptions';[m
+[31m-export const NVIDIA_TTS_URL = 'https://integrate.api.nvidia.com/v1/audio/speech';[m
+[31m-const WHISPER_MODEL = 'Systran/faster-whisper-base';[m
+[31m-const TTS_MODEL = 'nvidia/magpie-tts-multilingual';[m
+[31m-[m
+[31m-export function resolveNvidiaApiKey(apiKey: string): string | null {[m
+[31m-    const key = apiKey?.trim();[m
+[31m-    return key?.startsWith('nvapi-') ? key : null;[m
+[31m-}[m
+[31m-[m
+[31m-export class NvidiaMediaService {[m
+[31m-    public static async transcribe([m
+[31m-        media: Buffer,[m
+[31m-        mimeType: string,[m
+[31m-        apiKey: string,[m
+[31m-        http: IHttp,[m
+[31m-        endpoint = DEFAULT_STT_URL,[m
+[31m-        useCloudNvidia = false,[m
+[31m-    ): Promise<{ text: string; sourceLang: SupportedLanguage; demo: boolean }> {[m
+[31m-        const extension = this.extensionForMime(mimeType);[m
+[31m-        const filename = `clip.${extension}`;[m
+[31m-[m
+[31m-        if (this.isJsonProxyEndpoint(endpoint)) {[m
+[31m-            return this.transcribeViaJsonProxy(media, mimeType, filename, apiKey, http, endpoint, useCloudNvidia);[m
+[31m-        }[m
+[31m-[m
+[31m-        const form = this.buildMultipartForm([m
+[31m-            useCloudNvidia[m
+[31m-                ? { model: 'openai/whisper-large-v3', language: 'multi' }[m
+[31m-                : { model: WHISPER_MODEL },[m
+[31m-            {[m
+[31m-                name: 'file',[m
+[31m-                filename: `clip.${extension}`,[m
+[31m-                mimeType: mimeType || 'audio/ogg',[m
+[31m-                data: media,[m
+[31m-            },[m
+[31m-        );[m
+[31m-[m
+[31m-        const headers: Record<string, string> = {[m
+[31m-            'Content-Type': form.contentType,[m
+[31m-            Accept: 'application/json',[m
+[31m-        };[m
+[31m-        if (apiKey) {[m
+[31m-            headers.Authorization = `Bearer ${apiKey}`;[m
+[31m-        }[m
+[31m-[m
+[31m-        const response = await http.post(endpoint, {[m
+[31m-            headers,[m
+[31m-            content: form.body.toString('latin1'),[m
+[31m-            encoding: null,[m
+[31m-        });[m
+[31m-[m
+[31m-        if (!response || response.statusCode >= 400) {[m
+[31m-            const detail = typeof response?.content === 'string' ? response.content : JSON.stringify(response?.data);[m
+[31m-            throw new Error(`STT error: ${response?.statusCode} - ${detail}`);[m
+[31m-        }[m
+[31m-[m
+[31m-        const body = response.data || (response.content ? JSON.parse(response.content as string) : null);[m
+[31m-        const text: string | undefined = body?.text ?? body?.transcript;[m
+[31m-[m
+[31m-        if (!text?.trim()) {[m
+[31m-            throw new Error('No speech detected in the audio clip.');[m
+[31m-        }[m
+[31m-[m
+[31m-        return { text: text.trim(), sourceLang: LanguageDetectionService.detect(text), demo: false };[m
+[31m-    }[m
+[31m-[m
+[31m-    private static isJsonProxyEndpoint(endpoint: string): boolean {[m
+[31m-        return endpoint.includes('stt-proxy') || endpoint.endsWith('/v1/transcribe');[m
+[31m-    }[m
+[31m-[m
+[31m-    private static async transcribeViaJsonProxy([m
+[31m-        media: Buffer,[m
+[31m-        mimeType: string,[m
+[31m-        filename: string,[m
+[31m-        apiKey: string,[m
+[31m-        http: IHttp,[m
+[31m-        endpoint: string,[m
+[31m-        useCloudNvidia: boolean,[m
+[31m-    ): Promise<{ text: string; sourceLang: SupportedLanguage; demo: boolean }> {[m
+[31m-        const headers: Record<string, string> = {[m
+[31m-            'Content-Type': 'application/json',[m
+[31m-            Accept: 'application/json',[m
+[31m-        };[m
+[31m-        if (apiKey) {[m
+[31m-            headers.Authorization = `Bearer ${apiKey}`;[m
+[31m-        }[m
+[31m-[m
+[31m-        const response = await http.post(endpoint, {[m
+[31m-            headers,[m
+[31m-            content: JSON.stringify({[m
+[31m-                audioBase64: media.toString('base64'),[m
+[31m-                mimeType: mimeType || 'audio/mpeg',[m
+[31m-                filename,[m
+[31m-                model: useCloudNvidia ? 'openai/whisper-large-v3' : WHISPER_MODEL,[m
+[31m-            }),[m
+[31m-        });[m
+[31m-[m
+[31m-        if (!response || response.statusCode >= 400) {[m
+[31m-            const detail = typeof response?.content === 'string'[m
+[31m-                ? response.content[m
+[31m-                : JSON.stringify(response?.data ?? response?.content);[m
+[31m-            throw new Error(`STT error: ${response?.statusCode} - ${detail}`);[m
+[31m-        }[m
+[31m-[m
+[31m-        const body = response.data || (response.content ? JSON.parse(response.content as string) : null);[m
+[31m-[m
+[31m-        if (body?.detail && !body?.text && !body?.transcript) {[m
+[31m-            throw new Error(typeof body.detail === 'string' ? body.detail : JSON.stringify(body.detail));[m
+[31m-        }[m
+[31m-[m
+[31m-        const text: string | undefined = body?.text ?? body?.transcript;[m
+[31m-[m
+[31m-        if (!text?.trim()) {[m
+[31m-            throw new Error('No speech detected in the audio clip.');[m
+[31m-        }[m
+[31m-[m
+[31m-        return { text: text.trim(), sourceLang: LanguageDetectionService.detect(text), demo: false };[m
+[31m-    }[m
+[31m-[m
+[31m-    public static async synthesize([m
+[31m-        text: string,[m
+[31m-        targetLang: SupportedLanguage,[m
+[31m-        apiKey: string,[m
+[31m-        http: IHttp,[m
+[31m-        endpoint = NVIDIA_TTS_URL,[m
+[31m-    ): Promise<{ audio: Buffer; mimeType: string; demo: boolean }> {[m
+[31m-        const response = await http.post(endpoint, {[m
+[31m-            headers: {[m
+[31m-                Authorization: `Bearer ${apiKey}`,[m
+[31m-                'Content-Type': 'application/json',[m
+[31m-                Accept: 'audio/wav, audio/mpeg, application/json',[m
+[31m-            },[m
+[31m-            content: JSON.stringify({[m
+[31m-                model: TTS_MODEL,[m
+[31m-                input: text,[m
+[31m-                response_format: 'wav',[m
+[31m-                language: this.ttsLanguage(targetLang),[m
+[31m-            }),[m
+[31m-            encoding: null,[m
+[31m-        });[m
+[31m-[m
+[31m-        if (!response || response.statusCode >= 400) {[m
+[31m-            const errBody = typeof response?.content === 'string' ? response.content : JSON.stringify(response?.data);[m
+[31m-            throw new Error(`NVIDIA TTS error: ${response?.statusCode} - ${errBody}`);[m
+[31m-        }[m
+[31m-[m
+[31m-        const audio = this.responseToBuffer(response);[m
+[31m-        if (!audio.length) {[m
+[31m-            throw new Error('NVIDIA TTS returned empty audio');[m
+[31m-        }[m
+[31m-[m
+[31m-        return { audio, mimeType: 'audio/wav', demo: false };[m
+[31m-    }[m
+[31m-[m
+[31m-    private static buildMultipartForm([m
+[31m-        fields: Record<string, string>,[m
+[31m-        file: { name: string; filename: string; mimeType: string; data: Buffer },[m
+[31m-    ): { body: Buffer; contentType: string } {[m
+[31m-        const boundary = `----UgaJapa${Date.now().toString(16)}`;[m
+[31m-        const chunks: Buffer[] = [];[m
+[31m-[m
+[31m-        for (const [key, value] of Object.entries(fields)) {[m
+[31m-            chunks.push(Buffer.from([m
+[31m-                `--${boundary}\r\nContent-Disposition: form-data; name="${key}"\r\n\r\n${value}\r\n`,[m
+[31m-            ));[m
+[31m-        }[m
+[31m-[m
+[31m-        chunks.push(Buffer.from([m
+[31m-            `--${boundary}\r\nContent-Disposition: form-data; name="${file.name}"; filename="${file.filename}"\r\nContent-Type: ${file.mimeType}\r\n\r\n`,[m
+[31m-        ));[m
+[31m-        chunks.push(file.data);[m
+[31m-        chunks.push(Buffer.from(`\r\n--${boundary}--\r\n`));[m
+[31m-[m
+[31m-        return {[m
+[31m-            body: Buffer.concat(chunks),[m
+[31m-            contentType: `multipart/form-data; boundary=${boundary}`,[m
+[31m-        };[m
+[31m-    }[m
+[31m-[m
+[31m-    private static extensionForMime(mimeType: string): string {[m
+[31m-        if (mimeType.includes('webm')) return 'webm';[m
+[31m-        if (mimeType.includes('wav')) return 'wav';[m
+[31m-        if (mimeType.includes('mp4')) return 'mp4';[m
+[31m-        if (mimeType.includes('mpeg') || mimeType.includes('mp3')) return 'mp3';[m
+[31m-        return 'ogg';[m
+[31m-    }[m
+[31m-[m
+[31m-    private static ttsLanguage(targetLang: SupportedLanguage): string {[m
+[31m-        switch (targetLang) {[m
+[31m-            case 'ja': return 'Japanese';[m
+[31m-            case 'lg': return 'English';[m
+[31m-            default: return 'English';[m
+[31m-        }[m
+[31m-    }[m
+[31m-[m
+[31m-    private static responseToBuffer(response: { content?: string | Buffer; data?: unknown }): Buffer {[m
+[31m-        if (Buffer.isBuffer(response.content)) {[m
+[31m-            return response.content;[m
+[31m-        }[m
+[31m-        if (typeof response.content === 'string') {[m
+[31m-            return Buffer.from(response.content, 'binary');[m
+[31m-        }[m
+[31m-        if (typeof response.data === 'string') {[m
+[31m-            return Buffer.from(response.data, 'binary');[m
+[31m-        }[m
+[31m-        return Buffer.alloc(0);[m
+[31m-    }[m
+[31m-}[m
+[1mdiff --git a/ugajapa-translation-app/services/SpeechToTextService.ts b/ugajapa-translation-app/services/SpeechToTextService.ts[m
+[1mdeleted file mode 100644[m
+[1mindex 3dfcdaf..0000000[m
+[1m--- a/ugajapa-translation-app/services/SpeechToTextService.ts[m
+[1m+++ /dev/null[m
+[36m@@ -1,43 +0,0 @@[m
+[31m-import { IHttp } from '@rocket.chat/apps-engine/definition/accessors';[m
+[31m-import { SupportedLanguage } from './LanguageDetectionService';[m
+[31m-import { DEFAULT_STT_URL, NvidiaMediaService } from './NvidiaMediaService';[m
+[31m-[m
+[31m-export interface TranscribeRequest {[m
+[31m-    audio: Buffer;[m
+[31m-    mimeType: string;[m
+[31m-    endpoint: string;[m
+[31m-    apiKey: string;[m
+[31m-    http: IHttp;[m
+[31m-}[m
+[31m-[m
+[31m-export interface TranscribeResult {[m
+[31m-    text: string;[m
+[31m-    sourceLang: SupportedLanguage;[m
+[31m-    demo: boolean;[m
+[31m-    error?: string;[m
+[31m-}[m
+[31m-[m
+[31m-const DEMO_TRANSCRIPT = '[Voice message — speech-to-text unavailable]';[m
+[31m-[m
+[31m-export class SpeechToTextService {[m
+[31m-    public static async transcribe(req: TranscribeRequest): Promise<TranscribeResult> {[m
+[31m-        const endpoint = req.endpoint?.trim() || DEFAULT_STT_URL;[m
+[31m-[m
+[31m-        if (endpoint.includes('integrate.api.nvidia.com')) {[m
+[31m-            return {[m
+[31m-                text: DEMO_TRANSCRIPT,[m
+[31m-                sourceLang: 'en',[m
+[31m-                demo: true,[m
+[31m-                error: 'NVIDIA cloud STT is not available on integrate.api.nvidia.com. Use the default local stt-proxy service or set a custom STT endpoint.',[m
+[31m-            };[m
+[31m-        }[m
+[31m-[m
+[31m-        try {[m
+[31m-            const apiKey = req.apiKey?.trim() ?? '';[m
+[31m-            return await NvidiaMediaService.transcribe(req.audio, req.mimeType, apiKey, req.http, endpoint, false);[m
+[31m-        } catch (err) {[m
+[31m-            const message = err instanceof Error ? err.message : String(err);[m
+[31m-            return { text: DEMO_TRANSCRIPT, sourceLang: 'en', demo: true, error: message };[m
+[31m-        }[m
+[31m-    }[m
+[31m-}[m
+[1mdiff --git a/ugajapa-translation-app/services/TextToSpeechService.ts b/ugajapa-translation-app/services/TextToSpeechService.ts[m
+[1mdeleted file mode 100644[m
+[1mindex 5cbdfa0..0000000[m
+[1m--- a/ugajapa-translation-app/services/TextToSpeechService.ts[m
+[1m+++ /dev/null[m
+[36m@@ -1,48 +0,0 @@[m
+[31m-import { IHttp } from '@rocket.chat/apps-engine/definition/accessors';[m
+[31m-import { SupportedLanguage } from './LanguageDetectionService';[m
+[31m-[m
+[31m-export interface SynthesizeRequest {[m
+[31m-    text: string;[m
+[31m-    targetLang: SupportedLanguage;[m
+[31m-    endpoint: string;[m
+[31m-    apiKey: string;[m
+[31m-    http: IHttp;[m
+[31m-}[m
+[31m-[m
+[31m-export interface SynthesizeResult {[m
+[31m-    audio: Buffer | null;[m
+[31m-    mimeType: string;[m
+[31m-    demo: boolean;[m
+[31m-    error?: string;[m
+[31m-}[m
+[31m-[m
+[31m-export class TextToSpeechService {[m
+[31m-    public static async synthesize(req: SynthesizeRequest): Promise<SynthesizeResult> {[m
+[31m-        const endpoint = req.endpoint?.trim() ?? '';[m
+[31m-[m
+[31m-        if (!endpoint) {[m
+[31m-            return {[m
+[31m-                audio: null,[m
+[31m-                mimeType: 'audio/ogg',[m
+[31m-                demo: true,[m
+[31m-                error: 'No TTS endpoint configured. Translated text is shown without synthesized audio.',[m
+[31m-            };[m
+[31m-        }[m
+[31m-[m
+[31m-        if (endpoint.includes('integrate.api.nvidia.com')) {[m
+[31m-            return {[m
+[31m-                audio: null,[m
+[31m-                mimeType: 'audio/ogg',[m
+[31m-                demo: true,[m
+[31m-                error: 'NVIDIA cloud TTS is not available yet. Translated text is shown without synthesized audio.',[m
+[31m-            };[m
+[31m-        }[m
+[31m-[m
+[31m- 
