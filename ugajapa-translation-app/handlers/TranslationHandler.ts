@@ -38,7 +38,7 @@ export class TranslationHandler {
             if (!apiKey || !apiKey.trim()) {
                 extend.addAttachment({
                     color: '#F4A523',
-                    text: `Demo mode — no API key set.`,
+                    text: `⚠️ *Demo mode* — No NVIDIA API key (nvapi-...).\n🌐 *[${sourceLang.toUpperCase()} → ${targetLang.toUpperCase()}]* Run ./scripts/configure-app.sh or add your key in Admin > Apps > UgaJapa Translation > Settings`,
                     collapsed: false,
                 });
                 return extend.getMessage();

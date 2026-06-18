@@ -124,3 +124,4 @@ Key endpoints: `/api/v1/login`, `/api/v1/chat.sendMessage`, `/api/v1/rooms.info`
 ## License
 
 MIT — Rocket.Chat is MIT; UgaJapa Translation App is MIT.
+# TransChecker-plugin
