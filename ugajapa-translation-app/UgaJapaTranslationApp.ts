@@ -12,6 +12,7 @@ import { IMessage, IPreMessageSentExtend } from '@rocket.chat/apps-engine/defini
 import { IAppInfo } from '@rocket.chat/apps-engine/definition/metadata';
 import { SetLanguageCommand } from './commands/SetLanguageCommand';
 import { TranslateCommand } from './commands/TranslateCommand';
+import { EvalStatsCommand } from './commands/EvalStatsCommand';
 import { TranslationHandler } from './handlers/TranslationHandler';
 import { AppSettings } from './settings/AppSettings';
 
@@ -20,11 +21,16 @@ export class UgaJapaTranslationApp extends App implements IPreMessageSentExtend 
         super(info, logger, accessors);
     }
 
-    public async extendConfiguration(configuration: IConfigurationExtend, environmentRead: IEnvironmentRead): Promise<void> {
-        await Promise.all(AppSettings.map((setting) => configuration.settings.provideSetting(setting)));
-
+    public async extendConfiguration(
+        configuration: IConfigurationExtend,
+        environmentRead: IEnvironmentRead,
+    ): Promise<void> {
+        await Promise.all(
+            AppSettings.map((setting) => configuration.settings.provideSetting(setting)),
+        );
         configuration.slashCommands.provideSlashCommand(new SetLanguageCommand());
         configuration.slashCommands.provideSlashCommand(new TranslateCommand());
+        configuration.slashCommands.provideSlashCommand(new EvalStatsCommand());
     }
 
     public async onEnable(): Promise<boolean> {
@@ -32,8 +38,16 @@ export class UgaJapaTranslationApp extends App implements IPreMessageSentExtend 
         return true;
     }
 
-    public async checkPreMessageSentExtend(message: IMessage, read: IRead, http: IHttp): Promise<boolean> {
-        return Boolean(message.text?.trim()) && !message.customFields?.ugajapa_translation;
+    public async checkPreMessageSentExtend(
+        message: IMessage,
+        read: IRead,
+        http: IHttp,
+    ): Promise<boolean> {
+        const txt = message.text;
+        if (!txt || !txt.trim()) return false;
+        const cf = message.customFields;
+        if (cf && cf.ugajapa_translation) return false;
+        return true;
     }
 
     public async executePreMessageSentExtend(
