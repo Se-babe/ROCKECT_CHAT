@@ -37,8 +37,6 @@ services:
     restart: unless-stopped
     depends_on:
       - speech-stt
-    ports:
-      - "8090:8090"
     environment:
       STT_URL: http://speech-stt:8000/v1/audio/transcriptions
       WHISPER_MODEL: Systran/faster-whisper-base
